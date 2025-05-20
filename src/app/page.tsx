@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2, FileText, Trash2, Download, Users, Settings, UserCircle, LayoutDashboard, FolderOpen, Edit, MessageSquare, Video, Palette, Landmark, Briefcase, Sigma, CircleHelp, FileAudio, Clock, Calendar, PlusCircle, ToggleLeft, ToggleRight, Headphones,
-  Play, SkipBack, SkipForward, MicOff, Info, ListOrdered, UploadCloud, AudioLines, Volume2, Sun, Moon, Laptop, X, ListChecks, BookOpen, UserCheck
+  Play, SkipBack, SkipForward, MicOff, Info, ListOrdered, UploadCloud, AudioLines, Volume2, Sun, Moon, Laptop, X, ListChecks, BookOpen, UserCheck, Tag
 } from 'lucide-react';
 import { AppLogo } from '@/components/layout/AppLogo';
 import { transcribeAudioAction, searchTranscriptAction, diarizeTranscriptAction } from './actions';
@@ -18,7 +18,7 @@ import type { LiveTranscriptionInput } from '@/ai/flows/live-transcription';
 import type { DiarizeTranscriptInput, DiarizedSegment } from '@/ai/flows/diarize-transcript-flow';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger, DialogClose } from '@/components/ui/dialog';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
 import { Switch } from '@/components/ui/switch';
@@ -27,7 +27,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme } from '@/components/theme-provider';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator } from "@/components/ui/dropdown-menu";
+import { Badge } from '@/components/ui/badge';
 
 
 type RecordingState = 'idle' | 'recording' | 'paused';
@@ -37,6 +38,7 @@ interface Annotation {
   id: string;
   text: string;
   timestamp: number; // in seconds, relative to recording start
+  tag?: string;
 }
 interface SavedTranscript {
   id: string;
@@ -81,6 +83,9 @@ const getSpeakerColor = (speakerIdentifier: string) => {
   return speakerColors.DEFAULT;
 };
 
+const availableTags = ["Important", "Evidence", "Objection", "Ruling", "Question", "Testimony", "Argument", "Sidebar", "Hearsay", "Other"];
+const quickTagsList = ["Testimony", "Objection", "Ruling", "Evidence", "Argument", "Sidebar", "Hearsay"];
+
 
 export default function CourtProceedingsPage() {
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
@@ -119,6 +124,8 @@ export default function CourtProceedingsPage() {
 
   const [annotations, setAnnotations] = useState<Annotation[]>([]);
   const [newAnnotationText, setNewAnnotationText] = useState<string>('');
+  const [selectedAnnotationTag, setSelectedAnnotationTag] = useState<string>('');
+  const [showAllAnnotationsDialog, setShowAllAnnotationsDialog] = useState<boolean>(false);
 
 
   const [audioInputDevices, setAudioInputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -141,7 +148,7 @@ export default function CourtProceedingsPage() {
 
 
   const { toast } = useToast();
-  const { open: sidebarOpen } = useSidebar();
+  const { open: sidebarOpen, state: sidebarState } = useSidebar();
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
@@ -161,7 +168,7 @@ export default function CourtProceedingsPage() {
       setCustomLegalTerms(storedCustomTerms);
     }
 
-    setCurrentDateTime(new Date());
+    setCurrentDateTime(new Date()); // Set initial date on client
     dateTimeIntervalRef.current = setInterval(() => {
       setCurrentDateTime(new Date());
     }, 1000);
@@ -174,14 +181,15 @@ export default function CourtProceedingsPage() {
   useEffect(() => {
     const getAudioDevices = async () => {
       try {
-        await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); // Request permission
         const devices = await navigator.mediaDevices.enumerateDevices();
         const inputs = devices.filter(device => device.kind === 'audioinput');
         const outputs = devices.filter(device => device.kind === 'audiooutput');
         setAudioInputDevices(inputs);
         setAudioOutputDevices(outputs);
         if (inputs.length > 0 && !selectedInputDevice) setSelectedInputDevice(inputs[0].deviceId);
-        if (outputs.length > 0 && !selectedOutputDevice) setSelectedOutputDevice(outputs[0].deviceId); 
+        // Output device selection is usually browser/OS controlled, 'default' is often the best we can target programmatically
+        if (outputs.length > 0 && !selectedOutputDevice) setSelectedOutputDevice('default');
       } catch (err) {
         console.error("Error enumerating audio devices or getting permissions:", err);
         if (activeView === 'settings') { 
@@ -197,7 +205,7 @@ export default function CourtProceedingsPage() {
     if (activeView === 'settings' || (recordingState === 'idle' && !mediaRecorderRef.current)) { 
       getAudioDevices();
     }
-  }, [activeView, toast, recordingState]);
+  }, [activeView, toast, recordingState, selectedInputDevice, selectedOutputDevice]);
 
 
   useEffect(() => {
@@ -209,8 +217,10 @@ export default function CourtProceedingsPage() {
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
       }
-      if (recordingState === 'idle' && !isPlayingPlayback) { // Only reset if not actively playing back
-        setElapsedTime(0);
+      // Only reset if not actively playing back and not just paused
+      if (recordingState === 'idle' && !isPlayingPlayback) { 
+        // setElapsedTime(0); // This was causing the timer to reset on load if audio was present.
+                          // Playback time is now handled by audioPlayerRef.currentTime
       }
     }
     return () => {
@@ -244,7 +254,7 @@ export default function CourtProceedingsPage() {
   const formatTime = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = Math.floor(totalSeconds % 60); // Use Math.floor for clean seconds
+    const seconds = Math.floor(totalSeconds % 60); 
     return `${hours > 0 ? String(hours).padStart(2, '0') + ':' : ''}${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   };
 
@@ -283,11 +293,11 @@ export default function CourtProceedingsPage() {
     }
     if (!audioForDiarization || !currentTranscript.trim()) {
       const isExplicitAttempt = !!(audioUriToDiarize || transcriptToDiarize) || 
-                                (activeView === 'transcriptions' && !!(currentRecordingFullAudioUri || loadedAudioUri)); // Consider active view as explicit
+                                (activeView === 'transcriptions' && !!(currentRecordingFullAudioUri || loadedAudioUri)); 
       if (isExplicitAttempt) {
           toast({ title: 'Diarization Skipped', description: 'Full audio and raw transcript are required.', variant: 'default' });
       }
-      setDiarizedTranscript(null); // Ensure diarized is cleared if conditions aren't met
+      setDiarizedTranscript(null); 
       return;
     }
 
@@ -305,16 +315,16 @@ export default function CourtProceedingsPage() {
         toast({ title: 'Diarization Complete', description: 'Transcript has been segmented by speaker.', icon: <CheckCircle2 className="h-5 w-5 text-green-500" /> });
       } else if (response.error) {
         toast({ title: 'Diarization Failed', description: response.error, variant: 'destructive' });
-        setDiarizedTranscript([{speaker: "Error", text: "Diarization failed. Raw transcript retained."}]); // Provide feedback in transcript
+        setDiarizedTranscript([{speaker: "Error", text: "Diarization failed. Raw transcript retained."}]); 
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred during diarization.';
       toast({ title: 'Diarization Exception', description: message, variant: 'destructive' });
-       setDiarizedTranscript([{speaker: "Error", text: "Diarization exception. Raw transcript retained."}]); // Provide feedback
+       setDiarizedTranscript([{speaker: "Error", text: "Diarization exception. Raw transcript retained."}]); 
     } finally {
       setIsDiarizing(false);
     }
-  }, [isDiarizing, currentRecordingFullAudioUri, loadedAudioUri, rawTranscript, toast, customLegalTerms, activeView]); // Added activeView
+  }, [isDiarizing, currentRecordingFullAudioUri, loadedAudioUri, rawTranscript, toast, customLegalTerms, activeView]);
 
 
   const handleStartRecording = async () => {
@@ -367,7 +377,11 @@ export default function CourtProceedingsPage() {
             setDiarizedTranscript(null);
             setCurrentRecordingFullAudioUri(null);
             setLoadedAudioUri(null); 
-            setAnnotations([]); // Clear annotations for new session
+            setAnnotations([]); 
+            setCaseJudge('');
+            setCaseHearingType('');
+            setCaseCourtroom('');
+            setCaseParticipants([]);
             audioChunksRef.current = [];
             if (currentSessionTitle === 'Untitled Session' || currentSessionTitle.startsWith('Court Session -')) {
                 const now = new Date();
@@ -392,7 +406,7 @@ export default function CourtProceedingsPage() {
           setRecordingState('idle');
           stream.getTracks().forEach(track => track.stop());
           
-          if (previousState === 'recording' || previousState === 'paused') { // Only toast if it was actually running/paused
+          if (previousState === 'recording' || previousState === 'paused') { 
             toast({ title: 'Recording Stopped', icon: <Square className="h-5 w-5 text-red-500" /> });
           }
           
@@ -401,8 +415,12 @@ export default function CourtProceedingsPage() {
             try {
               const audioDataUri = await blobToDataURI(fullAudioBlob);
               setCurrentRecordingFullAudioUri(audioDataUri);
-              if (rawTranscript.trim() && audioDataUri && !diarizedTranscript) { // Check for existing diarization
-                setTimeout(() => handleDiarizeTranscript(audioDataUri, rawTranscript), 0); // Auto-diarize
+              if (audioPlayerRef.current) { // Set source for immediate playback if needed
+                audioPlayerRef.current.src = audioDataUri;
+                audioPlayerRef.current.load();
+              }
+              if (rawTranscript.trim() && audioDataUri && !diarizedTranscript) { 
+                setTimeout(() => handleDiarizeTranscript(audioDataUri, rawTranscript), 0); 
               }
             } catch (error) {
               console.error("Error creating full audio URI:", error);
@@ -415,7 +433,7 @@ export default function CourtProceedingsPage() {
         if (recordingState === 'paused' && mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') { 
              mediaRecorderRef.current.resume();
         } else { 
-            mediaRecorderRef.current.start(5000); // Start with 5s chunk interval
+            mediaRecorderRef.current.start(5000); 
         }
 
       } catch (error) {
@@ -431,17 +449,24 @@ export default function CourtProceedingsPage() {
     }
   };
   
-  const handleResumeRecording = () => { // Renamed for clarity
+  const handleResumeRecording = () => { 
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume(); 
     } else {
-      handleStartRecording(); // If not paused, treat as a start
+      handleStartRecording(); 
     }
   };
 
   const handleStopRecording = () => {
     if (mediaRecorderRef.current && (mediaRecorderRef.current.state === 'recording' || mediaRecorderRef.current.state === 'paused')) {
       mediaRecorderRef.current.stop(); 
+    } else if (recordingState === 'idle' && isPlayingPlayback && audioPlayerRef.current) {
+      // If playing back and idle (not recording), stop playback.
+      audioPlayerRef.current.pause();
+      audioPlayerRef.current.currentTime = 0; // Reset playback
+      setIsPlayingPlayback(false);
+      setElapsedTime(0); // Reset timer display for playback
+      toast({ title: "Playback Stopped" });
     } else if (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri || rawTranscript || currentSessionTitle !== 'Untitled Session' || caseJudge || caseHearingType || caseCourtroom || caseParticipants.length > 0 || annotations.length > 0)) {
       // Clear current session data if idle and data exists
       setRawTranscript('');
@@ -449,7 +474,7 @@ export default function CourtProceedingsPage() {
       setCurrentRecordingFullAudioUri(null);
       setLoadedAudioUri(null);
       if (audioPlayerRef.current) {
-        audioPlayerRef.current.src = ''; // Clear audio player source
+        audioPlayerRef.current.src = ''; 
         audioPlayerRef.current.load();
       }
       setIsPlayingPlayback(false);
@@ -471,25 +496,27 @@ export default function CourtProceedingsPage() {
     } else if (recordingState === 'paused') {
       handleResumeRecording();
     } else if (recordingState === 'idle') {
-      if (currentRecordingFullAudioUri || loadedAudioUri) { // If audio is available for playback
+      if (currentRecordingFullAudioUri || loadedAudioUri) { 
         if (audioPlayerRef.current) {
           if (isPlayingPlayback) {
             audioPlayerRef.current.pause();
-            setIsPlayingPlayback(false);
           } else {
-            audioPlayerRef.current.play().catch(e => console.error("Playback error:", e));
-            setIsPlayingPlayback(true);
+            audioPlayerRef.current.play().catch(e => {
+                console.error("Playback error:", e);
+                toast({title: "Playback Error", description: "Could not play audio.", variant: "destructive"});
+            });
           }
+          // The onPlay/onPause handlers on the audio element will set isPlayingPlayback
         }
-      } else { // No audio for playback, start recording
+      } else { 
         handleStartRecording();
       }
     }
   };
 
   const handleInitiateSave = () => {
-    if (!rawTranscript.trim() && !diarizedTranscript && !currentRecordingFullAudioUri && !loadedAudioUri && annotations.length === 0) {
-      toast({ title: "Cannot Save", description: "No data to save (transcript, audio, or annotations).", variant: "destructive" });
+    if (!rawTranscript.trim() && !diarizedTranscript && !currentRecordingFullAudioUri && !loadedAudioUri && annotations.length === 0 && currentSessionTitle === 'Untitled Session' && !caseJudge && !caseHearingType && !caseCourtroom && caseParticipants.length === 0) {
+      toast({ title: "Cannot Save", description: "No data to save.", variant: "destructive" });
       return;
     }
     if (!currentSessionTitle.trim() || currentSessionTitle === "Untitled Session") { 
@@ -540,8 +567,8 @@ export default function CourtProceedingsPage() {
     setRawTranscript(selectedTranscript.rawTranscript);
     setDiarizedTranscript(selectedTranscript.diarizedTranscript || null);
     const audioToLoad = selectedTranscript.audioDataUri || null;
-    setLoadedAudioUri(audioToLoad); // Set loaded audio first
-    setCurrentRecordingFullAudioUri(null); // Clear any "live" recording URI
+    setLoadedAudioUri(audioToLoad); 
+    setCurrentRecordingFullAudioUri(null); 
     setCurrentSessionTitle(selectedTranscript.title || "Untitled Session"); 
     setCaseJudge(selectedTranscript.judge || '');
     setCaseHearingType(selectedTranscript.hearingType || '');
@@ -553,7 +580,10 @@ export default function CourtProceedingsPage() {
     
     if (audioPlayerRef.current && audioToLoad) {
       audioPlayerRef.current.src = audioToLoad;
-      audioPlayerRef.current.load(); // Important to load the new source
+      audioPlayerRef.current.load(); 
+      audioPlayerRef.current.onloadedmetadata = () => {
+        setElapsedTime(0); // Reset elapsed time once metadata is loaded
+      };
     } else if (audioPlayerRef.current) {
       audioPlayerRef.current.src = '';
       audioPlayerRef.current.load();
@@ -562,7 +592,6 @@ export default function CourtProceedingsPage() {
     toast({ title: 'Transcript Loaded', description: `"${selectedTranscript.title || "Untitled Session"}" is now active.` });
     setActiveView("liveSession"); 
 
-    // Auto-diarize if needed
     if (audioToLoad && selectedTranscript.rawTranscript.trim() && !selectedTranscript.diarizedTranscript) {
       setTimeout(() => handleDiarizeTranscript(audioToLoad, selectedTranscript.rawTranscript), 0);
     }
@@ -626,7 +655,7 @@ export default function CourtProceedingsPage() {
       case 'csv':
         filename = `${sanitizedTitle}.csv`;
         mimeType = 'text/csv;charset=utf-8';
-        let csvContent = 'Speaker,Text\n'; // Header
+        let csvContent = 'Speaker,Text\n'; 
         if (diarizedTranscript && diarizedTranscript.length > 0) {
           csvContent += diarizedTranscript
             .map(segment => `"${segment.speaker.replace(/"/g, '""')}","${segment.text.replace(/"/g, '""')}"`)
@@ -634,7 +663,6 @@ export default function CourtProceedingsPage() {
         } else if (rawTranscript.trim()) {
           csvContent += `"Unknown Speaker","${rawTranscript.replace(/"/g, '""')}"`;
         } else {
-          // This case should be caught by the initial check, but as a fallback:
           toast({ title: "Cannot Export CSV", description: "No transcript data to export.", variant: "destructive" });
           return;
         }
@@ -662,10 +690,8 @@ export default function CourtProceedingsPage() {
     toast({ title: 'Export Started', description: `"${filename}" is downloading.`, icon: <Download className="h-4 w-4" /> });
   };
 
-
-  
   const canManuallyDiarize = recordingState === 'idle' && !!rawTranscript.trim() && !!(currentRecordingFullAudioUri || loadedAudioUri) && !isDiarizing;
-  const canSave = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript || !!currentRecordingFullAudioUri || !!loadedAudioUri || (currentSessionTitle !== 'Untitled Session' && currentSessionTitle.trim() !== '') || annotations.length > 0);
+  const canSave = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript || !!currentRecordingFullAudioUri || !!loadedAudioUri || (currentSessionTitle !== 'Untitled Session' && currentSessionTitle.trim() !== '') || annotations.length > 0 || caseJudge.trim() !== '' || caseHearingType.trim() !== '' || caseCourtroom.trim() !== '' || caseParticipants.length > 0);
   const canDownload = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript);
 
   const handleSaveCustomTerms = () => {
@@ -681,9 +707,8 @@ export default function CourtProceedingsPage() {
   const handleClearLocalStorage = () => {
     try {
       localStorage.removeItem('naijaLawScribeTranscripts');
-      localStorage.removeItem('naijaLawScribeCustomTerms'); // Also clear custom terms if desired
+      localStorage.removeItem('naijaLawScribeCustomTerms'); 
       setSavedTranscripts([]);
-      // setCustomLegalTerms(''); // Optionally reset in-app state too
       toast({ title: 'Local Storage Cleared', description: 'All saved sessions and custom terms have been removed from local storage.', variant: 'destructive' });
     } catch (e) {
       console.error("Failed to clear local storage:", e);
@@ -721,11 +746,32 @@ export default function CourtProceedingsPage() {
       id: Date.now().toString(),
       text: newAnnotationText,
       timestamp: timestamp,
+      tag: selectedAnnotationTag || undefined,
     };
-    setAnnotations(prev => [newAnnotation, ...prev]); // Add to the beginning for "Recent"
+    setAnnotations(prev => [newAnnotation, ...prev].sort((a,b) => b.timestamp - a.timestamp)); // Add and sort by most recent
     setNewAnnotationText('');
+    setSelectedAnnotationTag('');
     toast({title: "Annotation Added", icon: <CheckCircle2 className="h-4 w-4 text-green-500"/>});
   };
+
+  const handleAddQuickTag = (tag: string) => {
+    let timestamp = 0;
+    if (recordingState === 'recording' || recordingState === 'paused') {
+      timestamp = elapsedTime;
+    } else if (isPlayingPlayback && audioPlayerRef.current) {
+      timestamp = audioPlayerRef.current.currentTime;
+    }
+
+    const newAnnotation: Annotation = {
+      id: Date.now().toString(),
+      text: tag, // Use the tag itself as the main text for a quick tag
+      timestamp: timestamp,
+      tag: tag, // Also set the tag property
+    };
+    setAnnotations(prev => [newAnnotation, ...prev].sort((a,b) => b.timestamp - a.timestamp));
+    toast({title: `Quick Tag Added: ${tag}`, icon: <Tag className="h-4 w-4 text-blue-500"/>});
+  };
+
 
   const renderLiveSessionHeader = () => (
     <header className="bg-primary text-primary-foreground p-3 md:p-4 shadow-md">
@@ -757,7 +803,7 @@ export default function CourtProceedingsPage() {
       
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar - Case Information */}
-        <div className="w-64 bg-muted/80 p-4 flex-col border-r hidden md:flex"> 
+        <div className={`w-64 bg-muted/80 p-4 flex-col border-r ${sidebarState === 'collapsed' ? 'hidden' : 'hidden md:flex'}`}> 
           <Card className="flex-grow flex flex-col shadow-sm">
             <CardHeader className="p-4">
               <CardTitle className="text-lg">Case Details</CardTitle>
@@ -855,7 +901,7 @@ export default function CourtProceedingsPage() {
                <Button onClick={handleInitiateSave} disabled={!canSave || isSaving} className="w-full">
                   {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={16} className="mr-2" />} Save Session
               </Button>
-              <DropdownMenu>
+               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" className="w-full" disabled={!canDownload}>
                     <Download size={16} className="mr-2" /> Export
@@ -868,11 +914,14 @@ export default function CourtProceedingsPage() {
                   <DropdownMenuItem onClick={() => handleExportTranscript('csv')} disabled={!canDownload}>
                     <ListOrdered className="mr-2 h-4 w-4" /> CSV (.csv)
                   </DropdownMenuItem>
+                  <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => handleExportTranscript('pdf')} disabled={!canDownload}>
-                    <FileText className="mr-2 h-4 w-4" /> PDF (.pdf) <span className="text-xs text-muted-foreground ml-2">(Planned)</span>
+                    <FileText className="mr-2 h-4 w-4" /> PDF (.pdf) 
+                    <Badge variant="outline" className="ml-2 text-xs">Planned</Badge>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleExportTranscript('docx')} disabled={!canDownload}>
-                    <FileText className="mr-2 h-4 w-4" /> DOCX (.docx) <span className="text-xs text-muted-foreground ml-2">(Planned)</span>
+                    <FileText className="mr-2 h-4 w-4" /> DOCX (.docx)
+                    <Badge variant="outline" className="ml-2 text-xs">Planned</Badge>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -915,6 +964,7 @@ export default function CourtProceedingsPage() {
                                 height: `${dynamicHeight}%`,
                                 width: '3px',
                               }}
+                              suppressHydrationWarning={true}
                             />
                           );
                         })}
@@ -923,12 +973,24 @@ export default function CourtProceedingsPage() {
                              <audio 
                                 ref={audioPlayerRef}
                                 src={loadedAudioUri || currentRecordingFullAudioUri || undefined} 
-                                className="w-full hidden" // Hidden, controls are custom
+                                className="w-full hidden" 
                                 onPlay={() => setIsPlayingPlayback(true)}
                                 onPause={() => setIsPlayingPlayback(false)}
-                                onEnded={() => setIsPlayingPlayback(false)}
-                                onTimeUpdate={() => setElapsedTime(audioPlayerRef.current?.currentTime || 0) } // Update elapsed time for playback
-                                onLoadedMetadata={() => setElapsedTime(0)} // Reset elapsed time on new audio load for playback
+                                onEnded={() => {
+                                    setIsPlayingPlayback(false);
+                                    if (audioPlayerRef.current) audioPlayerRef.current.currentTime = 0; // Reset on end
+                                    setElapsedTime(0); // Ensure timer display reflects end/reset
+                                }}
+                                onTimeUpdate={() => {
+                                    if (audioPlayerRef.current && isPlayingPlayback) { // Only update if actively playing
+                                        setElapsedTime(audioPlayerRef.current.currentTime);
+                                    }
+                                }}
+                                onLoadedMetadata={() => {
+                                    if (audioPlayerRef.current) {
+                                        setElapsedTime(0); // Reset for new track
+                                    }
+                                }}
                             />
                         )}
                          {(recordingState !== 'idle' || isPlayingPlayback) && !(currentRecordingFullAudioUri || loadedAudioUri) && (
@@ -962,7 +1024,7 @@ export default function CourtProceedingsPage() {
                   </Button>
                   {((recordingState === 'recording' || recordingState === 'paused') || (isPlayingPlayback && (loadedAudioUri || currentRecordingFullAudioUri))) && (
                      <Button onClick={handleStopRecording} variant="destructive" size="lg" className="p-3 rounded-full border-destructive text-destructive-foreground hover:bg-destructive/90 w-16 h-16" 
-                             aria-label={isPlayingPlayback ? "Stop Playback" : "Stop Recording"}>
+                             aria-label={(recordingState === 'recording' || recordingState === 'paused') ? "Stop Recording" : "Stop Playback"}>
                         <Square size={28}/>
                      </Button>
                   )}
@@ -1054,7 +1116,7 @@ export default function CourtProceedingsPage() {
           </div>
         </div>
         
-        <div className="w-72 bg-muted/80 p-4 border-l hidden lg:flex flex-col"> 
+        <div className={`w-72 bg-muted/80 p-4 border-l ${sidebarState === 'collapsed' ? 'hidden' : 'hidden lg:flex'} flex-col`}> 
           <Card className="flex-grow flex flex-col shadow-sm">
             <CardHeader className="p-4">
               <CardTitle className="text-lg">Annotations</CardTitle>
@@ -1070,6 +1132,19 @@ export default function CourtProceedingsPage() {
                   value={newAnnotationText}
                   onChange={(e) => setNewAnnotationText(e.target.value)}
                 />
+                 <div className="mt-2">
+                    <Label htmlFor="annotation-tag" className="block text-xs font-medium text-muted-foreground mb-1">Tag (Optional)</Label>
+                    <Select value={selectedAnnotationTag} onValueChange={setSelectedAnnotationTag}>
+                        <SelectTrigger id="annotation-tag" className="h-8 text-xs bg-card">
+                            <SelectValue placeholder="Select tag..." />
+                        </SelectTrigger>
+                        <SelectContent>
+                            {availableTags.map(tag => (
+                                <SelectItem key={tag} value={tag} className="text-xs">{tag}</SelectItem>
+                            ))}
+                        </SelectContent>
+                    </Select>
+                </div>
                 <div className="flex justify-end mt-2">
                   <Button size="sm" className="text-xs" onClick={handleAddAnnotation} disabled={!newAnnotationText.trim()}>Add Note</Button>
                 </div>
@@ -1078,10 +1153,11 @@ export default function CourtProceedingsPage() {
               <Separator className="my-3"/>
               <h3 className="font-medium text-sm text-primary">Recent Annotations</h3>
               {annotations.length > 0 ? (
-                <ScrollArea className="h-60"> {/* Adjust height as needed */}
+                <ScrollArea className="h-40"> {/* Adjusted height */}
                   <div className="space-y-2">
-                  {annotations.map(ann => (
+                  {annotations.slice(0, 5).map(ann => ( // Show recent 5, more in dialog
                     <div key={ann.id} className="bg-card p-2.5 rounded border text-xs shadow-sm">
+                      {ann.tag && <Badge variant="secondary" className="mb-1 text-xs">{ann.tag}</Badge>}
                       <p className="text-muted-foreground text-xs mb-0.5">Time: {formatTime(ann.timestamp)}</p>
                       <p className="mt-1 whitespace-pre-wrap">{ann.text}</p>
                     </div>
@@ -1093,16 +1169,20 @@ export default function CourtProceedingsPage() {
               )}
 
               <div className="mt-4">
-                <h3 className="font-medium text-sm text-primary mb-1">Quick Tags (Placeholder)</h3>
+                <h3 className="font-medium text-sm text-primary mb-2">Quick Tags</h3>
                   <div className="flex flex-wrap gap-1">
-                      <Button variant="outline" size="sm" className="text-xs" disabled>Testimony</Button>
-                      <Button variant="outline" size="sm" className="text-xs" disabled>Objection</Button>
-                      <Button variant="outline" size="sm" className="text-xs" disabled>Ruling</Button>
+                      {quickTagsList.map(tag => (
+                          <Button key={tag} variant="outline" size="sm" className="text-xs" onClick={() => handleAddQuickTag(tag)}>
+                            <Tag size={12} className="mr-1"/> {tag}
+                          </Button>
+                      ))}
                   </div>
               </div>
             </CardContent>
              <CardFooter className="p-4 border-t bg-muted/50">
-                <Button variant="outline" className="w-full text-xs" disabled>View All Notes (Placeholder)</Button>
+                <Button variant="outline" className="w-full text-xs" onClick={() => setShowAllAnnotationsDialog(true)} disabled={annotations.length === 0}>
+                    <ListChecks size={14} className="mr-1.5"/> View All Notes ({annotations.length})
+                </Button>
             </CardFooter>
           </Card>
         </div>
@@ -1188,10 +1268,17 @@ export default function CourtProceedingsPage() {
           <div>
             <h3 className="text-md font-semibold mb-1 text-primary">Audio Playback</h3>
              <audio 
-                ref={el => audioPlayerRef.current = el} // Assign ref here as well for this view if needed
+                ref={el => { 
+                  // Ensure the ref is correctly assigned if the view is re-rendered.
+                  // This is a common pattern if the audio element might not always be in the DOM for this view.
+                  if (el && activeView === 'transcriptions') audioPlayerRef.current = el;
+                }}
                 src={loadedAudioUri || currentRecordingFullAudioUri || undefined} 
-                controls // Keep controls here for direct playback if desired
+                controls 
                 className="w-full rounded-md shadow-sm"
+                onPlay={() => setIsPlayingPlayback(true)}
+                onPause={() => setIsPlayingPlayback(false)}
+                onEnded={() => setIsPlayingPlayback(false)}
              >
                 Your browser does not support the audio element.
             </audio>
@@ -1263,11 +1350,12 @@ export default function CourtProceedingsPage() {
                   <DropdownMenuItem onClick={() => handleExportTranscript('csv')} disabled={!canDownload}>
                     <ListOrdered className="mr-2 h-4 w-4" /> CSV (.csv)
                   </DropdownMenuItem>
+                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => handleExportTranscript('pdf')} disabled={!canDownload}>
-                    <FileText className="mr-2 h-4 w-4" /> PDF (.pdf) <span className="text-xs text-muted-foreground ml-2">(Planned)</span>
+                    <FileText className="mr-2 h-4 w-4" /> PDF (.pdf) <Badge variant="outline" className="ml-2 text-xs">Planned</Badge>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleExportTranscript('docx')} disabled={!canDownload}>
-                    <FileText className="mr-2 h-4 w-4" /> DOCX (.docx) <span className="text-xs text-muted-foreground ml-2">(Planned)</span>
+                    <FileText className="mr-2 h-4 w-4" /> DOCX (.docx) <Badge variant="outline" className="ml-2 text-xs">Planned</Badge>
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -1551,12 +1639,12 @@ export default function CourtProceedingsPage() {
         </SidebarFooter>
       </Sidebar>
 
-      <SidebarInset className={`flex flex-col transition-all duration-300 ease-in-out bg-background ${sidebarOpen ? "md:ml-[16rem]" : "md:ml-[3rem]"}`}>
+      <SidebarInset className={`flex flex-col transition-all duration-300 ease-in-out bg-background ${sidebarState === 'collapsed' ? "md:ml-[3rem]" : "md:ml-[16rem]"}`}>
         <header className={`flex items-center justify-between mb-0 md:h-14 sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b ${activeView === 'liveSession' ? 'hidden' : ''}`}>
             <div className={`p-2 md:p-4 md:hidden ${sidebarOpen ? 'invisible': ''}`}> 
                 <Landmark className="h-7 w-7 text-primary" />
             </div>
-            <div className={`ml-auto p-2 md:p-4 md:hidden ${sidebarOpen ? 'hidden': ''}`}> 
+            <div className={`ml-auto p-2 md:p-4 md:hidden ${sidebarState === 'collapsed' ? '': 'hidden'}`}> 
                 <SidebarTrigger />
             </div>
              <div className="hidden md:flex items-center p-4 w-full">
@@ -1611,7 +1699,7 @@ export default function CourtProceedingsPage() {
                 <div className="grid grid-cols-4 items-center gap-4">
                     <Label className="text-right col-span-1 pt-2 self-start">Participants</Label>
                     <div className="col-span-3 space-y-1">
-                        {caseParticipants.length > 0 ? caseParticipants.map((p, i) => <span key={i} className="inline-block bg-muted text-muted-foreground text-xs px-2 py-1 rounded mr-1 mb-1">{p}</span>) : <span className="text-xs text-muted-foreground">No participants added.</span>}
+                        {caseParticipants.length > 0 ? caseParticipants.map((p, i) => <Badge key={i} variant="secondary" className="mr-1 mb-1">{p}</Badge>) : <span className="text-xs text-muted-foreground">No participants added.</span>}
                     </div>
                 </div>
                  <div className="grid grid-cols-4 items-center gap-4">
@@ -1629,6 +1717,42 @@ export default function CourtProceedingsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        <Dialog open={showAllAnnotationsDialog} onOpenChange={setShowAllAnnotationsDialog}>
+            <DialogContent className="sm:max-w-2xl">
+                <DialogHeader>
+                    <DialogTitle>All Annotations for: {currentSessionTitle}</DialogTitle>
+                    <DialogDescription>
+                        Review all notes and tags for this session. Sorted by most recent.
+                    </DialogDescription>
+                </DialogHeader>
+                <ScrollArea className="max-h-[60vh] p-1 pr-4">
+                    {annotations.length > 0 ? (
+                        <div className="space-y-3">
+                            {annotations.sort((a, b) => b.timestamp - a.timestamp).map(ann => (
+                                <Card key={ann.id} className="shadow-sm">
+                                    <CardContent className="p-3">
+                                        <div className="flex justify-between items-start mb-1">
+                                            {ann.tag && <Badge variant="outline" className="text-xs">{ann.tag}</Badge>}
+                                            <span className="text-xs text-muted-foreground ml-auto">{formatTime(ann.timestamp)}</span>
+                                        </div>
+                                        <p className="text-sm whitespace-pre-wrap">{ann.text}</p>
+                                    </CardContent>
+                                </Card>
+                            ))}
+                        </div>
+                    ) : (
+                        <p className="text-sm text-muted-foreground text-center py-8">No annotations for this session.</p>
+                    )}
+                </ScrollArea>
+                <DialogFooter>
+                    <DialogClose asChild>
+                        <Button type="button" variant="outline">Close</Button>
+                    </DialogClose>
+                </DialogFooter>
+            </DialogContent>
+        </Dialog>
+
          {activeView !== 'liveSession' && currentDateTime && ( 
             <footer className="w-full mt-auto p-3 text-center text-xs text-muted-foreground border-t bg-muted/30">
                 <p>&copy; {currentDateTime.getFullYear()} VeriCourt. All rights reserved.</p>
