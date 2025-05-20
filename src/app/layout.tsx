@@ -29,6 +29,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" suppressHydrationWarning> {/* suppressHydrationWarning is often useful with client-side theme switching */}
+      <head />
       <body className={`${geistSans.variable} ${geistMono.variable} antialiased font-sans`}>
         <ThemeProvider defaultTheme="system" storageKey="vericourt-theme">
           <SidebarProvider defaultOpen={true}>
