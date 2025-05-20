@@ -8,8 +8,8 @@ import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
-  Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2, FileText, Trash2, Download, Users, Settings, UserCircle, LayoutDashboard, FolderOpen, Edit, MessageSquare, Video, Palette, Landmark, Briefcase, Sigma, CircleHelp, FileAudio, Clock, PlusCircle, ToggleLeft, ToggleRight, Headphones,
-  Play, SkipBack, SkipForward, MicOff, Calendar, Info, ListOrdered, User, UploadCloud, AudioLines, Volume2
+  Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2, FileText, Trash2, Download, Users, Settings, UserCircle, LayoutDashboard, FolderOpen, Edit, MessageSquare, Video, Palette, Landmark, Briefcase, Sigma, CircleHelp, FileAudio, Clock, Calendar, PlusCircle, ToggleLeft, ToggleRight, Headphones,
+  Play, SkipBack, SkipForward, MicOff, Info, ListOrdered, User, UploadCloud, AudioLines, Volume2
 } from 'lucide-react';
 import { AppLogo } from '@/components/layout/AppLogo';
 import { transcribeAudioAction, searchTranscriptAction, diarizeTranscriptAction } from './actions';
@@ -138,13 +138,15 @@ export default function CourtProceedingsPage() {
         // toast({ title: "Audio Device Error", description: "Could not list audio devices. Microphone permission might be needed.", variant: "destructive"});
       }
     };
-    getAudioDevices();
+    if (activeView === 'settings') { // Only fetch if settings view is active or becoming active
+        getAudioDevices();
+    }
 
 
     return () => {
       if (dateTimeIntervalRef.current) clearInterval(dateTimeIntervalRef.current);
     };
-  }, []); // Removed selectedInputDevice and selectedOutputDevice from deps to avoid loop
+  }, [activeView]); 
 
   useEffect(() => {
     if (recordingState === 'recording') {
@@ -335,18 +337,16 @@ export default function CourtProceedingsPage() {
   
   const handleResumeRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
-      mediaRecorderRef.current.resume(); // This should trigger onresume
+      mediaRecorderRef.current.resume(); 
     } else {
-      // If trying to resume when idle, effectively start a new recording
       handleStartRecording();
     }
   };
 
   const handleStopRecording = () => {
     if (mediaRecorderRef.current && (mediaRecorderRef.current.state === 'recording' || mediaRecorderRef.current.state === 'paused')) {
-      mediaRecorderRef.current.stop(); // This will trigger onstop
+      mediaRecorderRef.current.stop(); 
     } else if (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri || rawTranscript)) {
-      // Clear out session data if stop is pressed in idle state with existing data
       setRawTranscript('');
       setDiarizedTranscript(null);
       setCurrentRecordingFullAudioUri(null);
@@ -363,7 +363,7 @@ export default function CourtProceedingsPage() {
       handlePauseRecording();
     } else if (recordingState === 'paused') {
       handleResumeRecording();
-    } else { // 'idle'
+    } else { 
       handleStartRecording();
     }
   };
@@ -1055,9 +1055,19 @@ export default function CourtProceedingsPage() {
         </div>
 
         <div className="p-4 border rounded-md bg-card shadow-sm">
-          <h3 className="text-lg font-semibold mb-2 text-primary flex items-center"><FileText className="mr-2 h-5 w-5" />Transcription Models</h3>
-          <p className="text-sm text-muted-foreground">Select custom language models or dictionaries for legal terms. (Placeholder)</p>
+          <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><FileText className="mr-2 h-5 w-5" />Transcription Models</h3>
+          <p className="text-sm text-muted-foreground mb-2">Customize the AI's transcription capabilities.</p>
+          <div className="space-y-2">
+            <Button variant="outline" disabled className="w-full justify-start text-left">
+              <Sigma className="mr-2 h-4 w-4" /> Select Language Model (Default)
+            </Button>
+            <Button variant="outline" disabled className="w-full justify-start text-left">
+              <PlusCircle className="mr-2 h-4 w-4" /> Add Custom Dictionary (e.g., Legal Jargon)
+            </Button>
+          </div>
+           <p className="text-xs text-muted-foreground mt-2">Feature placeholder: Functionality to select different base models or upload custom dictionaries for specialized terminology (e.g., Nigerian legal terms, specific case names) will be available in a future update.</p>
         </div>
+
         <div className="p-4 border rounded-md bg-card shadow-sm">
           <h3 className="text-lg font-semibold mb-2 text-primary flex items-center"><UploadCloud className="mr-2 h-5 w-5"/>Data Storage</h3>
           <p className="text-sm text-muted-foreground">Manage cloud or local storage options, backup, and archiving. (Placeholder)</p>
