@@ -1,3 +1,4 @@
+
 'use client';
 
 import React, { useState, useRef, useCallback, useEffect } from 'react';
@@ -5,38 +6,50 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea';
+import { Textarea } from '@/components/ui/textarea'; // Though not directly used for display, keep if needed elsewhere
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2, FileText, Trash2, Download } from 'lucide-react';
+import { Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2, FileText, Trash2, Download, Users } from 'lucide-react';
 import { AppLogo } from '@/components/layout/AppLogo';
-import { transcribeAudioAction, searchTranscriptAction } from './actions';
+import { transcribeAudioAction, searchTranscriptAction, diarizeTranscriptAction } from './actions';
 import type { SmartSearchInput, SmartSearchOutput } from '@/ai/flows/smart-search';
+import type { DiarizeTranscriptInput, DiarizeTranscriptOutput } from '@/ai/flows/diarize-transcript-flow';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
 
 type RecordingState = 'idle' | 'recording' | 'paused';
+type DiarizedSegment = { speaker: string; text: string; startTime?: number; endTime?: number };
+
 interface SavedTranscript {
   id: string;
   timestamp: number;
-  text: string;
   title: string;
+  rawTranscript: string;
+  diarizedTranscript: DiarizedSegment[] | null;
+  audioDataUri: string | null;
 }
 
 export default function CourtProceedingsPage() {
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
-  const [transcript, setTranscript] = useState<string>('');
+  const [rawTranscript, setRawTranscript] = useState<string>('');
+  const [diarizedTranscript, setDiarizedTranscript] = useState<DiarizedSegment[] | null>(null);
+  
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [searchResults, setSearchResults] = useState<SmartSearchOutput | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
+  
   const [isTranscribingChunk, setIsTranscribingChunk] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
+  const [isDiarizing, setIsDiarizing] = useState<boolean>(false);
+
   const [savedTranscripts, setSavedTranscripts] = useState<SavedTranscript[]>([]);
   const [currentSessionTitle, setCurrentSessionTitle] = useState<string>('');
   const [showSaveDialog, setShowSaveDialog] = useState<boolean>(false);
 
+  const [currentRecordingFullAudioUri, setCurrentRecordingFullAudioUri] = useState<string | null>(null);
+  const [loadedAudioUri, setLoadedAudioUri] = useState<string | null>(null);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -45,7 +58,6 @@ export default function CourtProceedingsPage() {
   const { toast } = useToast();
 
   useEffect(() => {
-    // Load saved transcripts from localStorage on mount
     const storedTranscripts = localStorage.getItem('naijaLawScribeTranscripts');
     if (storedTranscripts) {
       setSavedTranscripts(JSON.parse(storedTranscripts));
@@ -76,19 +88,18 @@ export default function CourtProceedingsPage() {
     if (recordingState === 'idle' || recordingState === 'paused') {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        mediaRecorderRef.current = new MediaRecorder(stream);
+        mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
 
         mediaRecorderRef.current.ondataavailable = async (event) => {
           if (event.data.size > 0) {
             audioChunksRef.current.push(event.data);
-            // Transcribe chunk immediately
             setIsTranscribingChunk(true);
             try {
               const audioBlob = new Blob([event.data], { type: event.data.type || 'audio/webm' });
               const audioDataUri = await blobToDataURI(audioBlob);
               const result = await transcribeAudioAction(audioDataUri);
               if (result.transcription) {
-                setTranscript((prev) => prev + result.transcription + ' ');
+                setRawTranscript((prev) => prev + result.transcription + ' ');
               } else if (result.error) {
                 toast({ title: 'Transcription Error', description: result.error, variant: 'destructive' });
               }
@@ -103,8 +114,13 @@ export default function CourtProceedingsPage() {
         
         mediaRecorderRef.current.onstart = () => {
           setRecordingState('recording');
-          audioChunksRef.current = []; // Clear previous chunks
-          if (recordingState === 'idle') setTranscript(''); // Clear transcript only if starting fresh
+          audioChunksRef.current = []; 
+          if (recordingState === 'idle') {
+            setRawTranscript(''); 
+            setDiarizedTranscript(null);
+            setCurrentRecordingFullAudioUri(null);
+            setLoadedAudioUri(null); // Clear any loaded audio
+          }
           toast({ title: 'Recording Started', description: 'Audio capture is active.', icon: <Mic className="h-5 w-5 text-green-500" /> });
         };
 
@@ -120,18 +136,24 @@ export default function CourtProceedingsPage() {
 
         mediaRecorderRef.current.onstop = async () => {
           setRecordingState('idle');
-          // Stop all tracks on the stream
           stream.getTracks().forEach(track => track.stop());
+          
+          if (audioChunksRef.current.length > 0) {
+            const fullAudioBlob = new Blob(audioChunksRef.current, { type: audioChunksRef.current[0]?.type || 'audio/webm' });
+            try {
+              const audioDataUri = await blobToDataURI(fullAudioBlob);
+              setCurrentRecordingFullAudioUri(audioDataUri);
+            } catch (error) {
+              console.error("Error creating full audio URI:", error);
+              toast({ title: 'Audio Processing Error', description: 'Failed to process full recording.', variant: 'destructive' });
+            }
+          }
+          // audioChunksRef.current = []; // Keep for potential save, clear on new recording start
           mediaRecorderRef.current = null;
           toast({ title: 'Recording Stopped', icon: <Square className="h-5 w-5 text-red-500" /> });
         };
         
-        // Start recording with timeslice to get data in chunks (e.g., every 5 seconds)
-        // This helps with "live" feel but might hit API limits or be costly.
-        // For more robust live, a streaming STT API would be better.
-        // Genkit's current `media` helper might not support streaming audio input directly.
-        // This implementation sends chunks as individual files.
-        mediaRecorderRef.current.start(5000); // Capture 5-second chunks
+        mediaRecorderRef.current.start(5000);
 
       } catch (error) {
         console.error('Error accessing microphone:', error);
@@ -159,7 +181,7 @@ export default function CourtProceedingsPage() {
   };
 
   const handleInitiateSave = () => {
-    if (!transcript.trim()) {
+    if (!rawTranscript.trim()) {
       toast({ title: "Cannot Save", description: "Transcript is empty.", variant: "destructive" });
       return;
     }
@@ -175,22 +197,22 @@ export default function CourtProceedingsPage() {
       return;
     }
     setIsSaving(true);
-    // Simulate saving delay
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate saving
 
     const newSavedTranscript: SavedTranscript = {
       id: Date.now().toString(),
       timestamp: Date.now(),
-      text: transcript,
       title: currentSessionTitle,
+      rawTranscript: rawTranscript,
+      diarizedTranscript: diarizedTranscript,
+      audioDataUri: currentRecordingFullAudioUri || loadedAudioUri, // Prefer current recording audio if available
     };
     persistSavedTranscripts([newSavedTranscript, ...savedTranscripts]);
     
     setIsSaving(false);
     setShowSaveDialog(false);
-    setCurrentSessionTitle(''); // Reset for next save
-    // Optionally clear current transcript after saving
-    // setTranscript('');
+    // Don't reset currentSessionTitle here, allow re-saving with same title if desired
+    // Don't clear current transcript/audio after saving, user might want to continue working or diarize
     toast({ title: 'Transcript Saved', description: `"${newSavedTranscript.title}" has been saved.`, icon: <CheckCircle2 className="h-5 w-5 text-green-500" /> });
   };
   
@@ -205,13 +227,17 @@ export default function CourtProceedingsPage() {
         toast({ title: 'Cannot Load', description: 'Please stop the current recording before loading another transcript.', variant: 'destructive'});
         return;
     }
-    setTranscript(selectedTranscript.text);
-    setCurrentSessionTitle(selectedTranscript.title); // For potential re-save
+    setRawTranscript(selectedTranscript.rawTranscript);
+    setDiarizedTranscript(selectedTranscript.diarizedTranscript || null);
+    setLoadedAudioUri(selectedTranscript.audioDataUri || null);
+    setCurrentRecordingFullAudioUri(null); // Clear any live recording audio
+    setCurrentSessionTitle(selectedTranscript.title); 
     toast({ title: 'Transcript Loaded', description: `"${selectedTranscript.title}" is now active.` });
   };
 
   const handleSearch = async () => {
-    if (!searchTerm.trim() || !transcript.trim()) {
+    const transcriptToSearch = diarizedTranscript ? diarizedTranscript.map(s => `${s.speaker}: ${s.text}`).join('\n') : rawTranscript;
+    if (!searchTerm.trim() || !transcriptToSearch.trim()) {
       toast({ title: 'Search Error', description: 'Please enter a search term and ensure there is a transcript to search.', variant: 'destructive' });
       return;
     }
@@ -219,7 +245,7 @@ export default function CourtProceedingsPage() {
     setSearchError(null);
     setSearchResults(null);
     try {
-      const input: SmartSearchInput = { transcription: transcript, searchTerm };
+      const input: SmartSearchInput = { transcription: transcriptToSearch, searchTerm };
       const response = await searchTranscriptAction(input);
       if (response.results) {
         setSearchResults(response.results);
@@ -238,12 +264,16 @@ export default function CourtProceedingsPage() {
   };
   
   const handleDownloadTranscript = () => {
-    if (!transcript.trim()) {
+    const transcriptToDownload = diarizedTranscript 
+      ? diarizedTranscript.map(s => `${s.speaker}:\n${s.text}`).join('\n\n') 
+      : rawTranscript;
+
+    if (!transcriptToDownload.trim()) {
       toast({ title: "Cannot Download", description: "Transcript is empty.", variant: "destructive" });
       return;
     }
     const title = currentSessionTitle || `Transcript-${new Date().toISOString()}`;
-    const blob = new Blob([transcript], { type: 'text/plain;charset=utf-8' });
+    const blob = new Blob([transcriptToDownload], { type: 'text/plain;charset=utf-8' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
@@ -255,6 +285,29 @@ export default function CourtProceedingsPage() {
     toast({ title: 'Download Started', description: `"${title}.txt" is downloading.` });
   };
 
+  const handleDiarizeTranscript = async () => {
+    const audioForDiarization = currentRecordingFullAudioUri || loadedAudioUri;
+    if (!audioForDiarization || !rawTranscript.trim()) {
+      toast({ title: 'Diarization Error', description: 'Full audio and raw transcript are required for diarization.', variant: 'destructive' });
+      return;
+    }
+    setIsDiarizing(true);
+    try {
+      const input: DiarizeTranscriptInput = { audioDataUri: audioForDiarization, rawTranscript };
+      const response = await diarizeTranscriptAction(input);
+      if (response.segments) {
+        setDiarizedTranscript(response.segments);
+        toast({ title: 'Diarization Complete', description: 'Transcript has been segmented by speaker.', icon: <CheckCircle2 className="h-5 w-5 text-green-500" /> });
+      } else if (response.error) {
+        toast({ title: 'Diarization Failed', description: response.error, variant: 'destructive' });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'An unknown error occurred during diarization.';
+      toast({ title: 'Diarization Exception', description: message, variant: 'destructive' });
+    } finally {
+      setIsDiarizing(false);
+    }
+  };
 
   useEffect(() => {
     if (transcriptScrollAreaRef.current) {
@@ -263,7 +316,7 @@ export default function CourtProceedingsPage() {
         scrollElement.scrollTop = scrollElement.scrollHeight;
       }
     }
-  }, [transcript]);
+  }, [rawTranscript, diarizedTranscript]);
 
   const getMicIcon = () => {
     if (recordingState === 'recording') {
@@ -271,6 +324,9 @@ export default function CourtProceedingsPage() {
     }
     return <Mic className="h-5 w-5" />;
   };
+  
+  const canDiarize = recordingState === 'idle' && !!rawTranscript.trim() && !!(currentRecordingFullAudioUri || loadedAudioUri) && !diarizedTranscript;
+
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-4 md:p-8 selection:bg-accent selection:text-accent-foreground">
@@ -282,7 +338,7 @@ export default function CourtProceedingsPage() {
         <Card className="shadow-lg">
           <CardHeader>
             <CardTitle className="text-xl">Courtroom Recorder</CardTitle>
-            <CardDescription>Record, transcribe, and manage court proceedings.</CardDescription>
+            <CardDescription>Record, transcribe, manage, and analyze court proceedings.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex flex-wrap gap-2 items-center">
@@ -328,25 +384,33 @@ export default function CourtProceedingsPage() {
               )}
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button onClick={handleInitiateSave} disabled={isSaving || recordingState !== 'idle' || !transcript.trim()} variant="secondary" aria-label="Save Transcript">
+                  <Button onClick={handleInitiateSave} disabled={isSaving || recordingState !== 'idle' || !rawTranscript.trim()} variant="secondary" aria-label="Save Transcript">
                     {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />} Save
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent><p>Save current transcript</p></TooltipContent>
+                <TooltipContent><p>Save current transcript and audio</p></TooltipContent>
               </Tooltip>
                <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button onClick={handleDownloadTranscript} disabled={recordingState !== 'idle' || !transcript.trim()} variant="outline" aria-label="Download Transcript">
+                  <Button onClick={handleDownloadTranscript} disabled={recordingState !== 'idle' || !rawTranscript.trim()} variant="outline" aria-label="Download Transcript">
                     <Download className="h-5 w-5" /> Download TXT
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent><p>Download transcript as .txt</p></TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button onClick={handleDiarizeTranscript} disabled={!canDiarize || isDiarizing} variant="outline" aria-label="Diarize Transcript">
+                    {isDiarizing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Users className="h-5 w-5" />} Diarize
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent><p>Identify speakers in the transcript</p></TooltipContent>
+              </Tooltip>
             </div>
-            {isTranscribingChunk && (
-              <div className="flex items-center text-sm text-muted-foreground">
+            {(isTranscribingChunk || isDiarizing) && (
+              <div className="flex items-center text-sm text-muted-foreground pt-2">
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                <span>Transcribing audio chunk...</span>
+                <span>{isDiarizing ? 'Identifying speakers...' : 'Transcribing audio chunk...'}</span>
               </div>
             )}
           </CardContent>
@@ -357,7 +421,7 @@ export default function CourtProceedingsPage() {
             <DialogHeader>
               <DialogTitle>Save Current Session</DialogTitle>
               <DialogDescription>
-                Enter a title for this court proceeding session.
+                Enter a title for this court proceeding session. The audio and transcript (raw and diarized, if available) will be saved.
               </DialogDescription>
             </DialogHeader>
             <Input 
@@ -374,17 +438,48 @@ export default function CourtProceedingsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        
+        {(loadedAudioUri || currentRecordingFullAudioUri) && (
+          <Card className="shadow-lg">
+            <CardHeader>
+              <CardTitle className="text-xl">Audio Playback</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <audio 
+                key={loadedAudioUri || currentRecordingFullAudioUri} 
+                controls 
+                src={loadedAudioUri || currentRecordingFullAudioUri || undefined} 
+                className="w-full"
+              >
+                Your browser does not support the audio element.
+              </audio>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="shadow-lg">
           <CardHeader>
-            <CardTitle className="text-xl">Live Transcription</CardTitle>
-            <CardDescription>The transcribed text will appear below in real-time.</CardDescription>
+            <CardTitle className="text-xl">Transcription</CardTitle>
+            <CardDescription>
+              {diarizedTranscript ? "Diarized transcript with identified speakers." : "Live transcription or loaded raw transcript."}
+            </CardDescription>
           </CardHeader>
           <CardContent>
             <ScrollArea ref={transcriptScrollAreaRef} className="h-72 w-full rounded-md border p-4 bg-muted/30">
-              <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                {transcript || <span className="text-muted-foreground">Waiting for transcription...</span>}
-              </pre>
+              {diarizedTranscript ? (
+                <div className="space-y-3">
+                  {diarizedTranscript.map((segment, index) => (
+                    <div key={index}>
+                      <strong className="text-primary">{segment.speaker}:</strong>
+                      <p className="text-sm whitespace-pre-wrap font-sans leading-relaxed ml-2">{segment.text}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                  {rawTranscript || <span className="text-muted-foreground">Waiting for transcription...</span>}
+                </pre>
+              )}
             </ScrollArea>
           </CardContent>
         </Card>
@@ -405,7 +500,7 @@ export default function CourtProceedingsPage() {
                 aria-label="Search Term"
                 onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
               />
-              <Button onClick={handleSearch} disabled={isSearching || !transcript.trim() || !searchTerm.trim()} aria-label="Search Transcript">
+              <Button onClick={handleSearch} disabled={isSearching || !(rawTranscript.trim() || diarizedTranscript) || !searchTerm.trim()} aria-label="Search Transcript">
                 {isSearching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />} Search
               </Button>
             </div>
@@ -432,7 +527,7 @@ export default function CourtProceedingsPage() {
           <Card className="shadow-lg">
             <CardHeader>
               <CardTitle className="text-xl">Saved Sessions</CardTitle>
-              <CardDescription>Load or delete previously saved court proceeding transcripts.</CardDescription>
+              <CardDescription>Load or delete previously saved court proceeding transcripts and audio.</CardDescription>
             </CardHeader>
             <CardContent>
               <ScrollArea className="h-60">
@@ -441,7 +536,11 @@ export default function CourtProceedingsPage() {
                     <li key={st.id} className="flex justify-between items-center p-3 border rounded-md hover:bg-muted/50 transition-colors">
                       <div>
                         <p className="font-medium">{st.title}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(st.timestamp).toLocaleString()}</p>
+                        <p className="text-xs text-muted-foreground">
+                          {new Date(st.timestamp).toLocaleString()}
+                          {st.diarizedTranscript ? ' (Diarized)' : ''}
+                          {st.audioDataUri ? ' (Audio available)' : ' (No audio)'}
+                        </p>
                       </div>
                       <div className="flex gap-2">
                         <Tooltip>
@@ -450,7 +549,7 @@ export default function CourtProceedingsPage() {
                               <FileText className="h-4 w-4"/>
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent><p>Load this transcript</p></TooltipContent>
+                          <TooltipContent><p>Load this session</p></TooltipContent>
                         </Tooltip>
                          <Tooltip>
                           <TooltipTrigger asChild>
@@ -458,7 +557,7 @@ export default function CourtProceedingsPage() {
                               <Trash2 className="h-4 w-4"/>
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent><p>Delete this transcript</p></TooltipContent>
+                          <TooltipContent><p>Delete this session</p></TooltipContent>
                         </Tooltip>
                       </div>
                     </li>
@@ -477,3 +576,5 @@ export default function CourtProceedingsPage() {
     </div>
   );
 }
+
+    

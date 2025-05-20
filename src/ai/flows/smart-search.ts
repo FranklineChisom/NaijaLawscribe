@@ -1,3 +1,4 @@
+
 // Use server directive.
 'use server';
 
@@ -66,3 +67,4 @@ const smartSearchFlow = ai.defineFlow(
     return output!;
   }
 );
+
