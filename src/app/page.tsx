@@ -6,20 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Textarea } from '@/components/ui/textarea'; // Though not directly used for display, keep if needed elsewhere
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2, FileText, Trash2, Download, Users } from 'lucide-react';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2, FileText, Trash2, Download, Users, History, Edit3, ListOrdered } from 'lucide-react';
 import { AppLogo } from '@/components/layout/AppLogo';
 import { transcribeAudioAction, searchTranscriptAction, diarizeTranscriptAction } from './actions';
 import type { SmartSearchInput, SmartSearchOutput } from '@/ai/flows/smart-search';
-import type { DiarizeTranscriptInput, DiarizeTranscriptOutput } from '@/ai/flows/diarize-transcript-flow';
+import type { DiarizeTranscriptInput, DiarizeTranscriptOutput, DiarizedSegment } from '@/ai/flows/diarize-transcript-flow';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 
-
 type RecordingState = 'idle' | 'recording' | 'paused';
-type DiarizedSegment = { speaker: string; text: string; startTime?: number; endTime?: number };
 
 interface SavedTranscript {
   id: string;
@@ -50,6 +48,8 @@ export default function CourtProceedingsPage() {
 
   const [currentRecordingFullAudioUri, setCurrentRecordingFullAudioUri] = useState<string | null>(null);
   const [loadedAudioUri, setLoadedAudioUri] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>("record");
+
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -119,7 +119,9 @@ export default function CourtProceedingsPage() {
             setRawTranscript(''); 
             setDiarizedTranscript(null);
             setCurrentRecordingFullAudioUri(null);
-            setLoadedAudioUri(null); // Clear any loaded audio
+            setLoadedAudioUri(null); 
+            const now = new Date();
+            setCurrentSessionTitle(`Court Session - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
           }
           toast({ title: 'Recording Started', description: 'Audio capture is active.', icon: <Mic className="h-5 w-5 text-green-500" /> });
         };
@@ -143,17 +145,17 @@ export default function CourtProceedingsPage() {
             try {
               const audioDataUri = await blobToDataURI(fullAudioBlob);
               setCurrentRecordingFullAudioUri(audioDataUri);
+              setActiveTab("manage-session"); // Switch to manage session tab
             } catch (error) {
               console.error("Error creating full audio URI:", error);
               toast({ title: 'Audio Processing Error', description: 'Failed to process full recording.', variant: 'destructive' });
             }
           }
-          // audioChunksRef.current = []; // Keep for potential save, clear on new recording start
           mediaRecorderRef.current = null;
           toast({ title: 'Recording Stopped', icon: <Square className="h-5 w-5 text-red-500" /> });
         };
         
-        mediaRecorderRef.current.start(5000);
+        mediaRecorderRef.current.start(5000); // Transcribe every 5 seconds
 
       } catch (error) {
         console.error('Error accessing microphone:', error);
@@ -181,13 +183,14 @@ export default function CourtProceedingsPage() {
   };
 
   const handleInitiateSave = () => {
-    if (!rawTranscript.trim()) {
+    if (!rawTranscript.trim() && !diarizedTranscript) { // Allow saving if diarized even if raw is empty (unlikely but possible)
       toast({ title: "Cannot Save", description: "Transcript is empty.", variant: "destructive" });
       return;
     }
-    const now = new Date();
-    const suggestedTitle = `Court Session - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    setCurrentSessionTitle(suggestedTitle);
+    if (!currentSessionTitle) {
+        const now = new Date();
+        setCurrentSessionTitle(`Court Session - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+    }
     setShowSaveDialog(true);
   };
 
@@ -197,22 +200,19 @@ export default function CourtProceedingsPage() {
       return;
     }
     setIsSaving(true);
-    await new Promise(resolve => setTimeout(resolve, 500)); // Simulate saving
-
+    
     const newSavedTranscript: SavedTranscript = {
       id: Date.now().toString(),
       timestamp: Date.now(),
       title: currentSessionTitle,
       rawTranscript: rawTranscript,
       diarizedTranscript: diarizedTranscript,
-      audioDataUri: currentRecordingFullAudioUri || loadedAudioUri, // Prefer current recording audio if available
+      audioDataUri: currentRecordingFullAudioUri || loadedAudioUri, 
     };
     persistSavedTranscripts([newSavedTranscript, ...savedTranscripts]);
     
     setIsSaving(false);
     setShowSaveDialog(false);
-    // Don't reset currentSessionTitle here, allow re-saving with same title if desired
-    // Don't clear current transcript/audio after saving, user might want to continue working or diarize
     toast({ title: 'Transcript Saved', description: `"${newSavedTranscript.title}" has been saved.`, icon: <CheckCircle2 className="h-5 w-5 text-green-500" /> });
   };
   
@@ -229,9 +229,11 @@ export default function CourtProceedingsPage() {
     }
     setRawTranscript(selectedTranscript.rawTranscript);
     setDiarizedTranscript(selectedTranscript.diarizedTranscript || null);
-    setLoadedAudioUri(selectedTranscript.audioDataUri || null);
-    setCurrentRecordingFullAudioUri(null); // Clear any live recording audio
+    const audioToLoad = selectedTranscript.audioDataUri || null;
+    setLoadedAudioUri(audioToLoad);
+    setCurrentRecordingFullAudioUri(null);
     setCurrentSessionTitle(selectedTranscript.title); 
+    setActiveTab("manage-session");
     toast({ title: 'Transcript Loaded', description: `"${selectedTranscript.title}" is now active.` });
   };
 
@@ -310,118 +312,306 @@ export default function CourtProceedingsPage() {
   };
 
   useEffect(() => {
-    if (transcriptScrollAreaRef.current) {
-      const scrollElement = transcriptScrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
-      if (scrollElement) {
-        scrollElement.scrollTop = scrollElement.scrollHeight;
-      }
+    if (transcriptScrollAreaRef.current && (rawTranscript || diarizedTranscript)) {
+        const scrollElement = transcriptScrollAreaRef.current.querySelector('div[data-radix-scroll-area-viewport]');
+        if (scrollElement) {
+            scrollElement.scrollTop = scrollElement.scrollHeight;
+        }
     }
   }, [rawTranscript, diarizedTranscript]);
 
-  const getMicIcon = () => {
+
+  const getMicIconSized = (size = "h-5 w-5") => {
     if (recordingState === 'recording') {
-      return <Mic className="h-5 w-5 text-red-500 animate-pulse" />;
+      return <Mic className={`${size} text-red-500 animate-pulse`} />;
     }
-    return <Mic className="h-5 w-5" />;
+    return <Mic className={size} />;
   };
   
   const canDiarize = recordingState === 'idle' && !!rawTranscript.trim() && !!(currentRecordingFullAudioUri || loadedAudioUri) && !diarizedTranscript;
+  const canSave = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript);
+  const canDownload = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript);
 
 
   return (
     <div className="min-h-screen bg-background text-foreground flex flex-col items-center p-4 md:p-8 selection:bg-accent selection:text-accent-foreground">
-      <header className="w-full max-w-4xl mb-6">
+      <header className="w-full max-w-5xl mb-6">
         <AppLogo />
       </header>
 
-      <main className="w-full max-w-4xl space-y-6">
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-xl">Courtroom Recorder</CardTitle>
-            <CardDescription>Record, transcribe, manage, and analyze court proceedings.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-wrap gap-2 items-center">
-              {recordingState === 'idle' && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button onClick={handleStartRecording} className="bg-green-600 hover:bg-green-700 text-white" aria-label="Start Recording">
-                      {getMicIcon()} Start Recording
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Begin audio recording</p></TooltipContent>
-                </Tooltip>
-              )}
-              {recordingState === 'recording' && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button onClick={handlePauseRecording} variant="outline" className="border-yellow-500 text-yellow-600 hover:bg-yellow-50" aria-label="Pause Recording">
-                      <Pause className="h-5 w-5" /> Pause
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Pause audio recording</p></TooltipContent>
-                </Tooltip>
-              )}
-              {recordingState === 'paused' && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                     <Button onClick={handleResumeRecording} variant="outline" className="border-green-500 text-green-600 hover:bg-green-50" aria-label="Resume Recording">
-                      {getMicIcon()} Resume
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Resume audio recording</p></TooltipContent>
-                </Tooltip>
-              )}
-              {(recordingState === 'recording' || recordingState === 'paused') && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button onClick={handleStopRecording} variant="destructive" aria-label="Stop Recording">
-                      <Square className="h-5 w-5" /> Stop
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent><p>Stop audio recording</p></TooltipContent>
-                </Tooltip>
-              )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button onClick={handleInitiateSave} disabled={isSaving || recordingState !== 'idle' || !rawTranscript.trim()} variant="secondary" aria-label="Save Transcript">
-                    {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />} Save
+      <main className="w-full max-w-5xl space-y-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 mb-4">
+            <TabsTrigger value="record" className="text-xs sm:text-sm">
+              <Mic className="mr-2 h-4 w-4" /> Record
+            </TabsTrigger>
+            <TabsTrigger value="manage-session" className="text-xs sm:text-sm" disabled={!currentRecordingFullAudioUri && !loadedAudioUri && !rawTranscript.trim()}>
+              <Edit3 className="mr-2 h-4 w-4" /> Manage Session
+            </TabsTrigger>
+            <TabsTrigger value="search" className="text-xs sm:text-sm" disabled={!rawTranscript.trim() && !diarizedTranscript}>
+              <Search className="mr-2 h-4 w-4" /> Search
+            </TabsTrigger>
+            <TabsTrigger value="load-saved" className="text-xs sm:text-sm">
+              <History className="mr-2 h-4 w-4" /> Load Saved
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="record">
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center">
+                  {getMicIconSized("h-6 w-6 mr-2")} Courtroom Recorder
+                </CardTitle>
+                <CardDescription>Start, pause, or stop audio recording for live transcription.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap gap-2 items-center">
+                  {recordingState === 'idle' && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button onClick={handleStartRecording} className="bg-green-600 hover:bg-green-700 text-white" aria-label="Start Recording">
+                          {getMicIconSized()} Start Recording
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Begin audio recording and live transcription</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                  {recordingState === 'recording' && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button onClick={handlePauseRecording} variant="outline" className="border-yellow-500 text-yellow-600 hover:bg-yellow-50" aria-label="Pause Recording">
+                          <Pause className="h-5 w-5" /> Pause
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Pause audio recording</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                  {recordingState === 'paused' && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button onClick={handleResumeRecording} variant="outline" className="border-green-500 text-green-600 hover:bg-green-50" aria-label="Resume Recording">
+                          {getMicIconSized()} Resume
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Resume audio recording</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                  {(recordingState === 'recording' || recordingState === 'paused') && (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button onClick={handleStopRecording} variant="destructive" aria-label="Stop Recording">
+                          <Square className="h-5 w-5" /> Stop
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent><p>Stop audio recording and finalize raw transcript</p></TooltipContent>
+                    </Tooltip>
+                  )}
+                </div>
+                {isTranscribingChunk && (
+                  <div className="flex items-center text-sm text-muted-foreground pt-2">
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    <span>Transcribing audio chunk...</span>
+                  </div>
+                )}
+              </CardContent>
+              <CardFooter>
+                <p className="text-xs text-muted-foreground">Recording will be chunked for live transcription. Full audio available after stopping.</p>
+              </CardFooter>
+            </Card>
+             <Card className="shadow-lg mt-6">
+                <CardHeader>
+                    <CardTitle className="text-xl">Live Transcription Feed</CardTitle>
+                    <CardDescription>Raw text as it's being transcribed. Scroll to bottom for latest.</CardDescription>
+                </CardHeader>
+                <CardContent>
+                    <ScrollArea ref={transcriptScrollAreaRef} className="h-60 w-full rounded-md border p-4 bg-muted/30">
+                        <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                        {rawTranscript || <span className="text-muted-foreground">Waiting for recording to start...</span>}
+                        </pre>
+                    </ScrollArea>
+                </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="manage-session">
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center"><FileText className="mr-2 h-6 w-6" />Session Management</CardTitle>
+                <CardDescription>Review, diarize, save, or download the current transcript and audio.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                {(currentRecordingFullAudioUri || loadedAudioUri) && (
+                  <div>
+                    <h3 className="text-lg font-semibold mb-2">Audio Playback</h3>
+                    <audio 
+                      key={loadedAudioUri || currentRecordingFullAudioUri} 
+                      controls 
+                      src={loadedAudioUri || currentRecordingFullAudioUri || undefined} 
+                      className="w-full rounded-md shadow"
+                    >
+                      Your browser does not support the audio element.
+                    </audio>
+                  </div>
+                )}
+                <div>
+                    <div className="flex justify-between items-center mb-2">
+                         <h3 className="text-lg font-semibold">
+                            {diarizedTranscript ? "Diarized Transcript" : "Raw Transcript"}
+                         </h3>
+                         {diarizedTranscript && <ListOrdered className="h-5 w-5 text-primary" />}
+                    </div>
+                  <ScrollArea ref={transcriptScrollAreaRef} className="h-72 w-full rounded-md border p-4 bg-muted/30">
+                    {diarizedTranscript ? (
+                      <div className="space-y-3">
+                        {diarizedTranscript.map((segment, index) => (
+                          <div key={index}>
+                            <strong className="text-primary">{segment.speaker}:</strong>
+                            <p className="text-sm whitespace-pre-wrap font-sans leading-relaxed ml-2">{segment.text}</p>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
+                        {rawTranscript || <span className="text-muted-foreground">No transcript available. Record or load a session.</span>}
+                      </pre>
+                    )}
+                  </ScrollArea>
+                </div>
+                 <div className="flex flex-wrap gap-2 items-center pt-4 border-t">
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                        <Button onClick={handleDiarizeTranscript} disabled={!canDiarize || isDiarizing} variant="outline" aria-label="Diarize Transcript">
+                            {isDiarizing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Users className="h-5 w-5" />} Diarize
+                        </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Identify speakers in the transcript</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                        <Button onClick={handleInitiateSave} disabled={!canSave || isSaving} variant="secondary" aria-label="Save Transcript">
+                            {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />} Save Session
+                        </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Save current transcript and audio</p></TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                        <TooltipTrigger asChild>
+                        <Button onClick={handleDownloadTranscript} disabled={!canDownload} variant="outline" aria-label="Download Transcript">
+                            <Download className="h-5 w-5" /> Download TXT
+                        </Button>
+                        </TooltipTrigger>
+                        <TooltipContent><p>Download transcript as .txt</p></TooltipContent>
+                    </Tooltip>
+                 </div>
+                 {isDiarizing && (
+                    <div className="flex items-center text-sm text-muted-foreground pt-2">
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        <span>Identifying speakers... This may take a few moments.</span>
+                    </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="search">
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center"><Search className="mr-2 h-6 w-6" />Smart Search</CardTitle>
+                <CardDescription>Search the current transcript for keywords, phrases, or legal references.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex gap-2">
+                  <Input
+                    type="text"
+                    placeholder="Enter search term..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="flex-grow"
+                    aria-label="Search Term"
+                    onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                  />
+                  <Button onClick={handleSearch} disabled={isSearching || (!rawTranscript.trim() && !diarizedTranscript) || !searchTerm.trim()} aria-label="Search Transcript">
+                    {isSearching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />} Search
                   </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Save current transcript and audio</p></TooltipContent>
-              </Tooltip>
-               <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button onClick={handleDownloadTranscript} disabled={recordingState !== 'idle' || !rawTranscript.trim()} variant="outline" aria-label="Download Transcript">
-                    <Download className="h-5 w-5" /> Download TXT
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Download transcript as .txt</p></TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button onClick={handleDiarizeTranscript} disabled={!canDiarize || isDiarizing} variant="outline" aria-label="Diarize Transcript">
-                    {isDiarizing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Users className="h-5 w-5" />} Diarize
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent><p>Identify speakers in the transcript</p></TooltipContent>
-              </Tooltip>
-            </div>
-            {(isTranscribingChunk || isDiarizing) && (
-              <div className="flex items-center text-sm text-muted-foreground pt-2">
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                <span>{isDiarizing ? 'Identifying speakers...' : 'Transcribing audio chunk...'}</span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
+                </div>
+                {searchError && (
+                  <div className="text-red-600 p-3 bg-red-100 border border-red-300 rounded-md flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5" /> {searchError}
+                  </div>
+                )}
+                {searchResults && (
+                  <div className="space-y-3 p-3 bg-green-50 border border-green-200 rounded-md">
+                    <h3 className="font-semibold text-lg text-primary">Search Results:</h3>
+                    <p className="text-sm italic text-muted-foreground">{searchResults.summary}</p>
+                    <ScrollArea className="h-60">
+                        <ul className="list-disc list-inside space-y-1 text-sm pl-2">
+                        {searchResults.searchResults.map((result, index) => (
+                            <li key={index} className="py-1 border-b border-border last:border-b-0">{result}</li>
+                        ))}
+                        </ul>
+                    </ScrollArea>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="load-saved">
+            <Card className="shadow-lg">
+              <CardHeader>
+                <CardTitle className="text-xl flex items-center"><History className="mr-2 h-6 w-6" />Saved Sessions</CardTitle>
+                <CardDescription>Load or delete previously saved court proceeding transcripts and audio.</CardDescription>
+              </CardHeader>
+              <CardContent>
+                {savedTranscripts.length > 0 ? (
+                  <ScrollArea className="h-96">
+                    <ul className="space-y-2">
+                      {savedTranscripts.sort((a,b) => b.timestamp - a.timestamp).map(st => (
+                        <li key={st.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-md hover:bg-muted/50 transition-colors">
+                          <div className="mb-2 sm:mb-0">
+                            <p className="font-medium">{st.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(st.timestamp).toLocaleString()}
+                              {st.diarizedTranscript ? ' (Diarized)' : ''}
+                              {st.audioDataUri ? ' (Audio available)' : ' (No audio)'}
+                            </p>
+                          </div>
+                          <div className="flex gap-2">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="outline" size="sm" onClick={() => handleLoadSavedTranscript(st)} aria-label={`Load ${st.title}`}>
+                                  <FileText className="h-4 w-4"/> Load
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent><p>Load this session</p></TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button variant="destructive" size="sm" onClick={() => handleDeleteSavedTranscript(st.id)} aria-label={`Delete ${st.title}`}>
+                                  <Trash2 className="h-4 w-4"/> Delete
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent><p>Delete this session</p></TooltipContent>
+                            </Tooltip>
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  </ScrollArea>
+                ) : (
+                  <p className="text-muted-foreground text-center py-8">No saved sessions yet.</p>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
 
         <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Save Current Session</DialogTitle>
               <DialogDescription>
-                Enter a title for this court proceeding session. The audio and transcript (raw and diarized, if available) will be saved.
+                Enter or confirm the title for this court proceeding session. The audio and transcript (raw and diarized, if available) will be saved.
               </DialogDescription>
             </DialogHeader>
             <Input 
@@ -439,136 +629,8 @@ export default function CourtProceedingsPage() {
           </DialogContent>
         </Dialog>
         
-        {(loadedAudioUri || currentRecordingFullAudioUri) && (
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-xl">Audio Playback</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <audio 
-                key={loadedAudioUri || currentRecordingFullAudioUri} 
-                controls 
-                src={loadedAudioUri || currentRecordingFullAudioUri || undefined} 
-                className="w-full"
-              >
-                Your browser does not support the audio element.
-              </audio>
-            </CardContent>
-          </Card>
-        )}
-
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-xl">Transcription</CardTitle>
-            <CardDescription>
-              {diarizedTranscript ? "Diarized transcript with identified speakers." : "Live transcription or loaded raw transcript."}
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ScrollArea ref={transcriptScrollAreaRef} className="h-72 w-full rounded-md border p-4 bg-muted/30">
-              {diarizedTranscript ? (
-                <div className="space-y-3">
-                  {diarizedTranscript.map((segment, index) => (
-                    <div key={index}>
-                      <strong className="text-primary">{segment.speaker}:</strong>
-                      <p className="text-sm whitespace-pre-wrap font-sans leading-relaxed ml-2">{segment.text}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                  {rawTranscript || <span className="text-muted-foreground">Waiting for transcription...</span>}
-                </pre>
-              )}
-            </ScrollArea>
-          </CardContent>
-        </Card>
-
-        <Card className="shadow-lg">
-          <CardHeader>
-            <CardTitle className="text-xl">Smart Search</CardTitle>
-            <CardDescription>Search the current transcript for keywords, phrases, or legal references.</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex gap-2">
-              <Input
-                type="text"
-                placeholder="Enter search term..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="flex-grow"
-                aria-label="Search Term"
-                onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-              />
-              <Button onClick={handleSearch} disabled={isSearching || !(rawTranscript.trim() || diarizedTranscript) || !searchTerm.trim()} aria-label="Search Transcript">
-                {isSearching ? <Loader2 className="h-5 w-5 animate-spin" /> : <Search className="h-5 w-5" />} Search
-              </Button>
-            </div>
-            {searchError && (
-              <div className="text-red-600 p-3 bg-red-100 border border-red-300 rounded-md flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5" /> {searchError}
-              </div>
-            )}
-            {searchResults && (
-              <div className="space-y-3 p-3 bg-green-50 border border-green-200 rounded-md">
-                <h3 className="font-semibold text-lg text-primary">Search Results:</h3>
-                <p className="text-sm italic text-muted-foreground">{searchResults.summary}</p>
-                <ul className="list-disc list-inside space-y-1 text-sm pl-2">
-                  {searchResults.searchResults.map((result, index) => (
-                    <li key={index} className="py-1 border-b border-border last:border-b-0">{result}</li>
-                  ))}
-                </ul>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-        
-        {savedTranscripts.length > 0 && (
-          <Card className="shadow-lg">
-            <CardHeader>
-              <CardTitle className="text-xl">Saved Sessions</CardTitle>
-              <CardDescription>Load or delete previously saved court proceeding transcripts and audio.</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ScrollArea className="h-60">
-                <ul className="space-y-2">
-                  {savedTranscripts.map(st => (
-                    <li key={st.id} className="flex justify-between items-center p-3 border rounded-md hover:bg-muted/50 transition-colors">
-                      <div>
-                        <p className="font-medium">{st.title}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {new Date(st.timestamp).toLocaleString()}
-                          {st.diarizedTranscript ? ' (Diarized)' : ''}
-                          {st.audioDataUri ? ' (Audio available)' : ' (No audio)'}
-                        </p>
-                      </div>
-                      <div className="flex gap-2">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="outline" size="sm" onClick={() => handleLoadSavedTranscript(st)} aria-label={`Load ${st.title}`}>
-                              <FileText className="h-4 w-4"/>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent><p>Load this session</p></TooltipContent>
-                        </Tooltip>
-                         <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button variant="destructive" size="sm" onClick={() => handleDeleteSavedTranscript(st.id)} aria-label={`Delete ${st.title}`}>
-                              <Trash2 className="h-4 w-4"/>
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent><p>Delete this session</p></TooltipContent>
-                        </Tooltip>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              </ScrollArea>
-            </CardContent>
-          </Card>
-        )}
       </main>
-      <footer className="w-full max-w-4xl mt-12 text-center text-sm text-muted-foreground">
+      <footer className="w-full max-w-5xl mt-12 text-center text-sm text-muted-foreground">
         <Separator className="my-4"/>
         <p>&copy; {new Date().getFullYear()} Naija Lawscribe. All rights reserved.</p>
         <p className="mt-1">Built with modern AI for Nigerian legal professionals.</p>
