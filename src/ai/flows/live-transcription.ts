@@ -5,7 +5,7 @@
 'use server';
 
 import {ai} from '@/ai/genkit';
-import {z} from 'genkit';
+import {z}from 'genkit';
 
 const LiveTranscriptionInputSchema = z.object({
   audioDataUri: z
@@ -13,6 +13,7 @@ const LiveTranscriptionInputSchema = z.object({
     .describe(
       "Audio data as a data URI that must include a MIME type and use Base64 encoding. Expected format: 'data:<mimetype>;base64,<encoded_data>'."
     ),
+  customTerms: z.string().optional().describe('A string of custom terms or jargon, separated by commas or newlines, to help guide transcription.')
 });
 
 export type LiveTranscriptionInput = z.infer<typeof LiveTranscriptionInputSchema>;
@@ -31,7 +32,13 @@ const liveTranscriptionPrompt = ai.definePrompt({
   name: 'liveTranscriptionPrompt',
   input: {schema: LiveTranscriptionInputSchema},
   output: {schema: LiveTranscriptionOutputSchema},
-  prompt: `Transcribe the following audio in real-time:\n\n{{media url=audioDataUri}}`,
+  prompt: `Transcribe the following audio in real-time.
+{{#if customTerms}}
+Pay special attention to the following custom terms or legal jargon and prioritize them if recognized:
+{{{customTerms}}}
+{{/if}}
+Audio:
+{{media url=audioDataUri}}`,
 });
 
 const liveTranscriptionFlow = ai.defineFlow(

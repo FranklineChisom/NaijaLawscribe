@@ -14,10 +14,12 @@ import {
 import { AppLogo } from '@/components/layout/AppLogo';
 import { transcribeAudioAction, searchTranscriptAction, diarizeTranscriptAction } from './actions';
 import type { SmartSearchInput, SmartSearchOutput } from '@/ai/flows/smart-search';
+import type { LiveTranscriptionInput } from '@/ai/flows/live-transcription';
 import type { DiarizeTranscriptInput, DiarizedSegment } from '@/ai/flows/diarize-transcript-flow';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
@@ -84,6 +86,7 @@ export default function CourtProceedingsPage() {
   const [savedTranscripts, setSavedTranscripts] = useState<SavedTranscript[]>([]);
   const [currentSessionTitle, setCurrentSessionTitle] = useState<string>('Untitled Session');
   const [showSaveDialog, setShowSaveDialog] = useState<boolean>(false);
+  const [showClearStorageDialog, setShowClearStorageDialog] = useState<boolean>(false);
 
   const [currentRecordingFullAudioUri, setCurrentRecordingFullAudioUri] = useState<string | null>(null);
   const [loadedAudioUri, setLoadedAudioUri] = useState<string | null>(null);
@@ -99,6 +102,7 @@ export default function CourtProceedingsPage() {
   const [selectedInputDevice, setSelectedInputDevice] = useState<string>('');
   const [selectedOutputDevice, setSelectedOutputDevice] = useState<string>('');
   const [noiseCancellationEnabled, setNoiseCancellationEnabled] = useState<boolean>(false);
+  const [customLegalTerms, setCustomLegalTerms] = useState<string>('');
 
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -117,14 +121,24 @@ export default function CourtProceedingsPage() {
     if (storedTranscripts) {
       setSavedTranscripts(JSON.parse(storedTranscripts));
     }
+    const storedCustomTerms = localStorage.getItem('naijaLawScribeCustomTerms');
+    if (storedCustomTerms) {
+      setCustomLegalTerms(storedCustomTerms);
+    }
+
     dateTimeIntervalRef.current = setInterval(() => {
       setCurrentDateTime(new Date());
     }, 1000);
+    
+    return () => {
+      if (dateTimeIntervalRef.current) clearInterval(dateTimeIntervalRef.current);
+    };
+  }, []); 
 
-    // Fetch audio devices for settings
+  useEffect(() => {
+    // Fetch audio devices for settings when settings view is active or dependencies change
     const getAudioDevices = async () => {
       try {
-        // Request permission first, as enumerateDevices might not return labels without it
         await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         const devices = await navigator.mediaDevices.enumerateDevices();
         const inputs = devices.filter(device => device.kind === 'audioinput');
@@ -135,18 +149,15 @@ export default function CourtProceedingsPage() {
         if (outputs.length > 0 && !selectedOutputDevice) setSelectedOutputDevice(outputs[0].deviceId);
       } catch (err) {
         console.error("Error enumerating audio devices or getting permissions:", err);
-        // toast({ title: "Audio Device Error", description: "Could not list audio devices. Microphone permission might be needed.", variant: "destructive"});
+        // Consider a less intrusive way to inform about permission issues if needed
       }
     };
-    if (activeView === 'settings') { // Only fetch if settings view is active or becoming active
-        getAudioDevices();
+
+    if (activeView === 'settings') {
+      getAudioDevices();
     }
+  }, [activeView, selectedInputDevice, selectedOutputDevice]);
 
-
-    return () => {
-      if (dateTimeIntervalRef.current) clearInterval(dateTimeIntervalRef.current);
-    };
-  }, [activeView, selectedInputDevice, selectedOutputDevice]); 
 
   useEffect(() => {
     if (recordingState === 'recording') {
@@ -214,7 +225,11 @@ export default function CourtProceedingsPage() {
     setIsDiarizing(true);
     setDiarizedTranscript(null); 
     try {
-      const input: DiarizeTranscriptInput = { audioDataUri: audioForDiarization, rawTranscript: currentTranscript };
+      const input: DiarizeTranscriptInput = { 
+        audioDataUri: audioForDiarization, 
+        rawTranscript: currentTranscript,
+        customTerms: customLegalTerms || undefined,
+      };
       const response = await diarizeTranscriptAction(input);
       if (response.segments) {
         setDiarizedTranscript(response.segments);
@@ -230,7 +245,7 @@ export default function CourtProceedingsPage() {
     } finally {
       setIsDiarizing(false);
     }
-  }, [isDiarizing, currentRecordingFullAudioUri, loadedAudioUri, rawTranscript, toast, activeView]);
+  }, [isDiarizing, currentRecordingFullAudioUri, loadedAudioUri, rawTranscript, toast, activeView, customLegalTerms]);
 
 
   const handleStartRecording = async () => {
@@ -249,7 +264,11 @@ export default function CourtProceedingsPage() {
               try {
                 const audioBlob = new Blob([event.data], { type: event.data.type || 'audio/webm' });
                 const audioDataUri = await blobToDataURI(audioBlob);
-                const result = await transcribeAudioAction(audioDataUri);
+                const transcriptionInput: LiveTranscriptionInput = { 
+                  audioDataUri, 
+                  customTerms: customLegalTerms || undefined,
+                };
+                const result = await transcribeAudioAction(transcriptionInput);
                 if (result.transcription) {
                   setRawTranscript((prev) => prev + result.transcription + ' ');
                 } else if (result.error) {
@@ -339,6 +358,7 @@ export default function CourtProceedingsPage() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume(); 
     } else {
+      // This case implies starting if completely idle or if state is somehow desynced
       handleStartRecording();
     }
   };
@@ -347,6 +367,7 @@ export default function CourtProceedingsPage() {
     if (mediaRecorderRef.current && (mediaRecorderRef.current.state === 'recording' || mediaRecorderRef.current.state === 'paused')) {
       mediaRecorderRef.current.stop(); 
     } else if (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri || rawTranscript)) {
+      // This is more like a "clear current session" button now if recording is already stopped.
       setRawTranscript('');
       setDiarizedTranscript(null);
       setCurrentRecordingFullAudioUri(null);
@@ -363,7 +384,7 @@ export default function CourtProceedingsPage() {
       handlePauseRecording();
     } else if (recordingState === 'paused') {
       handleResumeRecording();
-    } else { 
+    } else { // 'idle'
       handleStartRecording();
     }
   };
@@ -418,19 +439,22 @@ export default function CourtProceedingsPage() {
     setDiarizedTranscript(selectedTranscript.diarizedTranscript || null);
     const audioToLoad = selectedTranscript.audioDataUri || null;
     setLoadedAudioUri(audioToLoad);
-    setCurrentRecordingFullAudioUri(null); 
+    setCurrentRecordingFullAudioUri(null); // Clear any live recording audio
     setCurrentSessionTitle(selectedTranscript.title || "Untitled Session"); 
-    setElapsedTime(0); 
+    setElapsedTime(0); // Reset timer for loaded session (audio player will have its own duration)
     
     toast({ title: 'Transcript Loaded', description: `"${selectedTranscript.title || "Untitled Session"}" is now active.` });
-    setActiveView("transcriptions"); 
+    setActiveView("transcriptions"); // Switch to transcriptions view to see the loaded content
 
+    // Automatically try to diarize if not already done and audio is present
     if (audioToLoad && selectedTranscript.rawTranscript.trim() && !selectedTranscript.diarizedTranscript) {
+      // Use a timeout to ensure state updates from loading have settled before diarizing
       setTimeout(() => handleDiarizeTranscript(audioToLoad, selectedTranscript.rawTranscript), 0);
     }
   };
 
   const handleSearch = async () => {
+    // Use active transcript for search, prioritizing diarized if available
     const transcriptToSearch = diarizedTranscript ? diarizedTranscript.map(s => `${s.speaker}: ${s.text}`).join('\n') : rawTranscript;
     if (!searchTerm.trim() || !transcriptToSearch.trim()) {
       toast({ title: 'Search Error', description: 'Please enter a search term and ensure there is a transcript to search.', variant: 'destructive' });
@@ -483,6 +507,7 @@ export default function CourtProceedingsPage() {
   useEffect(() => {
     const targetRef = activeView === 'liveSession' ? liveTranscriptScrollAreaRef : transcriptScrollAreaRef;
     if (targetRef.current && (rawTranscript || diarizedTranscript)) {
+        // Find the viewport div within the ScrollArea component
         const scrollElement = targetRef.current.querySelector('div[data-radix-scroll-area-viewport]');
         if (scrollElement) {
             scrollElement.scrollTop = scrollElement.scrollHeight;
@@ -493,6 +518,19 @@ export default function CourtProceedingsPage() {
   const canManuallyDiarize = recordingState === 'idle' && !!rawTranscript.trim() && !!(currentRecordingFullAudioUri || loadedAudioUri) && !isDiarizing;
   const canSave = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript);
   const canDownload = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript);
+
+  const handleSaveCustomTerms = () => {
+    localStorage.setItem('naijaLawScribeCustomTerms', customLegalTerms);
+    toast({ title: 'Custom Terms Saved', description: 'Your custom legal terms have been saved locally.' });
+  };
+
+  const handleClearLocalStorage = () => {
+    localStorage.removeItem('naijaLawScribeTranscripts');
+    setSavedTranscripts([]);
+    toast({ title: 'Local Storage Cleared', description: 'All saved sessions have been removed from local storage.', variant: 'destructive' });
+    setShowClearStorageDialog(false);
+  };
+
 
   const renderLiveSessionHeader = () => (
     <header className="bg-primary text-primary-foreground p-3 md:p-4 shadow-md">
@@ -523,11 +561,18 @@ export default function CourtProceedingsPage() {
             <CardContent className="space-y-3 text-sm flex-grow overflow-y-auto px-4 pb-4">
               <div>
                 <Label className="text-xs text-muted-foreground">Case Number</Label>
-                <p className="font-medium">{currentSessionTitle === "Untitled Session" || currentSessionTitle.startsWith("Court Session -") ? "N/A (New Session)" : currentSessionTitle}</p>
+                <p className="font-medium">{currentSessionTitle.startsWith("Court Session -") ? "N/A (New Session)" : currentSessionTitle}</p>
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">Case Title</Label>
-                <p className="font-medium">{currentSessionTitle === "Untitled Session" ? "State v. John Doe (Example)" : currentSessionTitle.replace(/CR-\d{4}-\d{4}\s*-\s*/, '')}</p> {/* Placeholder logic */}
+                <Input 
+                  type="text" 
+                  value={currentSessionTitle} 
+                  onChange={(e) => setCurrentSessionTitle(e.target.value)} 
+                  placeholder="Enter case title..."
+                  className="text-sm h-8 mt-1 bg-card"
+                  disabled={recordingState !== 'idle'}
+                />
               </div>
               <div>
                 <Label className="text-xs text-muted-foreground">Judge</Label>
@@ -542,13 +587,11 @@ export default function CourtProceedingsPage() {
                 <p className="font-medium">Court 2 (Placeholder)</p>
               </div>
               <Separator className="my-3" />
-              <h3 className="font-semibold text-sm mb-2">Participants</h3>
+              <h3 className="font-semibold text-sm mb-2">Participants (Placeholder)</h3>
               <ul className="space-y-1 text-xs">
                 <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Justice Smith (Judge)</li>
                 <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Barr. Adekunle (Prosecution)</li>
                 <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Barr. Eze (Defense)</li>
-                <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Mr. Okoro (Defendant)</li>
-                <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Mrs. Bello (Witness 1)</li>
               </ul>
             </CardContent>
             <CardFooter className="flex-col space-y-2 p-4 border-t bg-muted/50">
@@ -581,9 +624,10 @@ export default function CourtProceedingsPage() {
                   <div className="w-full">
                     <div className="relative w-full h-24 md:h-32 bg-muted/30 rounded-md">
                       <div className="absolute inset-0 flex items-center justify-center px-2 overflow-hidden">
+                        {/* Simplified Waveform */}
                         {Array.from({ length: 80 }).map((_, i) => {
                            const barIsActive = recordingState === 'recording' && i < (elapsedTime % 80); 
-                           const randomHeight = Math.random() * 60 + 20;
+                           const randomHeight = Math.random() * 60 + 20; // For dynamic feel
                            const dynamicHeight = (isTranscribingChunk || (recordingState === 'recording' && autoTranscription)) && recordingState !== 'paused'
                                                 ? randomHeight 
                                                 : (recordingState === 'paused' ? 30 : Math.sin(i * 0.1 + elapsedTime * 0.5) * 25 + 40); 
@@ -616,6 +660,11 @@ export default function CourtProceedingsPage() {
                                 {recordingState === 'recording' ? "Recording in progress..." : "Recording paused..."}
                             </div>
                         )}
+                         {recordingState === 'idle' && !(currentRecordingFullAudioUri || loadedAudioUri) && (
+                             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                                Press Play to start recording.
+                            </div>
+                         )}
                     </div>
                   </div>
                 </div>
@@ -635,6 +684,11 @@ export default function CourtProceedingsPage() {
                         <Square size={28}/>
                      </Button>
                   )}
+                   {(recordingState === 'idle' && (rawTranscript || diarizedTranscript || currentRecordingFullAudioUri || loadedAudioUri)) && ( // Show "Clear Session" if idle but data exists
+                        <Button onClick={handleStopRecording} variant="outline" size="lg" className="p-3 rounded-full w-16 h-16" aria-label="Clear Current Session Data">
+                            <Trash2 size={28}/>
+                        </Button>
+                    )}
                   <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground"><SkipForward size={20} /></Button></TooltipTrigger><TooltipContent><p>Next Segment (Disabled)</p></TooltipContent></Tooltip>
                 </div>
                 
@@ -651,7 +705,7 @@ export default function CourtProceedingsPage() {
                   </div>
                   <div className="flex space-x-2 mt-2 sm:mt-0">
                     <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => setActiveView('settings')}><Headphones size={18}/></Button></TooltipTrigger><TooltipContent><p>Audio Input/Output Settings</p></TooltipContent></Tooltip>
-                    <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground"><Info size={18} /></Button></TooltipTrigger><TooltipContent><p>Session Info (Disabled)</p></TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground"><Info size={18} /></Button></TooltipTrigger><TooltipContent><p>Session Info (Placeholder)</p></TooltipContent></Tooltip>
                   </div>
                 </div>
                  {(isTranscribingChunk || (recordingState === 'recording' && !isTranscribingChunk && autoTranscription)) && (
@@ -703,7 +757,7 @@ export default function CourtProceedingsPage() {
                          <span className="text-muted-foreground">Waiting for recording or transcription...</span>
                     )}
                     {isDiarizing && <div className="flex items-center text-muted-foreground"><Loader2 className="inline h-4 w-4 animate-spin mr-1" /> Identifying speakers...</div>}
-                    {recordingState === 'recording' && autoTranscription && !isTranscribingChunk && (
+                    {recordingState === 'recording' && autoTranscription && !isTranscribingChunk && !isTranscribingChunk && (
                       <div className="flex items-center animate-pulse text-muted-foreground">
                         <div className="h-2 w-2 rounded-full bg-primary mr-1 animate-ping delay-75"></div>
                         <div className="h-2 w-2 rounded-full bg-primary mr-1 animate-ping delay-150"></div>
@@ -726,21 +780,18 @@ export default function CourtProceedingsPage() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm flex-grow overflow-y-auto px-4 pb-4">
               <div className="mb-4">
-                <Label htmlFor="annotation-text" className="block text-xs font-medium text-muted-foreground mb-1">Add Note or Tag</Label>
+                <Label htmlFor="annotation-text" className="block text-xs font-medium text-muted-foreground mb-1">Add Note or Tag (Placeholder)</Label>
                 <Textarea 
                   id="annotation-text"
                   className="w-full border rounded-md p-2 text-sm bg-card focus:border-primary" 
                   rows={3}
-                  placeholder="Add note about current testimony... (Placeholder)"
+                  placeholder="Add note about current testimony..."
                   disabled 
                 />
                 <div className="flex justify-between mt-2">
                   <select className="text-xs border rounded p-1 bg-card text-foreground w-2/3 focus:border-primary" disabled>
                     <option>Select tag (e.g. Evidence)</option>
                     <option>Important</option>
-                    <option>Evidence</option>
-                    <option>Objection</option>
-                    <option>Ruling</option>
                   </select>
                   <Button size="sm" className="text-xs" disabled>Add</Button>
                 </div>
@@ -749,24 +800,11 @@ export default function CourtProceedingsPage() {
               <Separator className="my-3"/>
               <h3 className="font-medium text-sm text-primary">Recent Annotations (Placeholder)</h3>
               <div className="bg-card p-3 rounded border text-xs shadow-sm">
-                <div className="flex justify-between items-start">
-                  <span className="bg-yellow-500/20 text-yellow-700 dark:text-yellow-400 px-2 py-0.5 rounded text-xs">Important</span>
-                  <span className="text-xs text-muted-foreground">10:40 AM</span>
-                </div>
                 <p className="mt-1">Defendant admitted presence.</p>
-              </div>
-               <div className="bg-card p-3 rounded border text-xs shadow-sm">
-                <div className="flex justify-between items-start">
-                  <span className="bg-blue-500/20 text-blue-700 dark:text-blue-400 px-2 py-0.5 rounded text-xs">Evidence</span>
-                  <span className="text-xs text-muted-foreground">10:35 AM</span>
-                </div>
-                <p className="mt-1">Officer testified about observation.</p>
               </div>
               <h3 className="font-medium text-sm mt-4 text-primary">Quick Tags (Placeholder)</h3>
                 <div className="flex flex-wrap gap-1">
                     <Button variant="outline" size="sm" className="text-xs" disabled>Testimony</Button>
-                    <Button variant="outline" size="sm" className="text-xs" disabled>Objection</Button>
-                    <Button variant="outline" size="sm" className="text-xs" disabled>Ruling</Button>
                 </div>
             </CardContent>
             <CardFooter className="p-4 border-t bg-muted/50">
@@ -782,8 +820,8 @@ export default function CourtProceedingsPage() {
           <span>System Status: {recordingState !== 'idle' ? 'Online & Active' : 'Online'}</span>
         </div>
         <div className="flex space-x-3">
-          <span>Storage: 512 GB Available (Placeholder)</span>
-          <span>Backup: Auto (Placeholder)</span>
+          <span>Storage: Local (Placeholder)</span>
+          <span>Backup: N/A (Placeholder)</span>
         </div>
       </footer>
     </div>
@@ -1007,7 +1045,7 @@ export default function CourtProceedingsPage() {
         <CardTitle className="text-xl flex items-center"><Settings className="mr-2 h-6 w-6 text-primary" />Application Settings</CardTitle>
         <CardDescription>Configure application preferences.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 p-4">
+      <CardContent className="space-y-6 p-4 overflow-y-auto max-h-[calc(100vh-180px)]">
         <div className="p-4 border rounded-md bg-card shadow-sm">
           <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><Headphones className="mr-2 h-5 w-5" />Audio Configuration</h3>
           <div className="space-y-4">
@@ -1022,13 +1060,13 @@ export default function CourtProceedingsPage() {
                     <SelectItem key={device.deviceId} value={device.deviceId}>
                       {device.label || `Input Device ${device.deviceId.substring(0,8)}`}
                     </SelectItem>
-                  )) : <SelectItem value="no-input" disabled>No input devices found</SelectItem>}
+                  )) : <SelectItem value="no-input" disabled>No input devices found. Grant mic permission.</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label htmlFor="audio-output-select" className="text-sm font-medium">Audio Output Device</Label>
-              <Select value={selectedOutputDevice} onValueChange={setSelectedOutputDevice}>
+              <Label htmlFor="audio-output-select" className="text-sm font-medium">Audio Output Device (System Controlled)</Label>
+              <Select value={selectedOutputDevice} onValueChange={setSelectedOutputDevice} disabled>
                 <SelectTrigger id="audio-output-select" className="mt-1">
                   <SelectValue placeholder="Select output device..." />
                 </SelectTrigger>
@@ -1040,37 +1078,67 @@ export default function CourtProceedingsPage() {
                   )) : <SelectItem value="no-output" disabled>No output devices found</SelectItem>}
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground mt-1">Note: Output device selection is informational. Actual output device is controlled by your OS/browser.</p>
+              <p className="text-xs text-muted-foreground mt-1">Note: Output device selection is controlled by your OS/browser.</p>
             </div>
             <div className="flex items-center justify-between pt-2">
-              <Label htmlFor="noise-cancellation-switch" className="text-sm font-medium">Enable Noise Cancellation</Label>
+              <Label htmlFor="noise-cancellation-switch" className="text-sm font-medium">Enable Noise Cancellation (Placeholder)</Label>
               <Switch 
                 id="noise-cancellation-switch" 
                 checked={noiseCancellationEnabled} 
                 onCheckedChange={setNoiseCancellationEnabled}
               />
             </div>
-             <p className="text-xs text-muted-foreground">Actual noise cancellation implementation is a future enhancement.</p>
+             <p className="text-xs text-muted-foreground">Actual noise cancellation is a future enhancement.</p>
           </div>
         </div>
 
         <div className="p-4 border rounded-md bg-card shadow-sm">
           <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><FileText className="mr-2 h-5 w-5" />Transcription Models</h3>
-          <p className="text-sm text-muted-foreground mb-2">Customize the AI's transcription capabilities.</p>
-          <div className="space-y-2">
+          <div className="space-y-4">
+             <div>
+                <Label htmlFor="custom-legal-terms" className="text-sm font-medium">Custom Legal Terms & Jargon</Label>
+                <Textarea 
+                    id="custom-legal-terms"
+                    placeholder="Enter terms, one per line (e.g., res ipsa loquitur, voir dire, Obong Effiong Bassey)"
+                    value={customLegalTerms}
+                    onChange={(e) => setCustomLegalTerms(e.target.value)}
+                    className="mt-1"
+                    rows={5}
+                />
+                <p className="text-xs text-muted-foreground mt-1">These terms will be prioritized by the AI during transcription and diarization. Saved locally in your browser.</p>
+                 <Button onClick={handleSaveCustomTerms} size="sm" className="mt-2">
+                    <Save className="mr-2 h-4 w-4"/> Save Custom Terms
+                </Button>
+            </div>
             <Button variant="outline" disabled className="w-full justify-start text-left">
-              <Sigma className="mr-2 h-4 w-4" /> Select Language Model (Default)
-            </Button>
-            <Button variant="outline" disabled className="w-full justify-start text-left">
-              <PlusCircle className="mr-2 h-4 w-4" /> Add Custom Dictionary (e.g., Legal Jargon)
+              <Sigma className="mr-2 h-4 w-4" /> Select Language Model (Default - Placeholder)
             </Button>
           </div>
-           <p className="text-xs text-muted-foreground mt-2">Feature placeholder: Functionality to select different base models or upload custom dictionaries for specialized terminology (e.g., Nigerian legal terms, specific case names) will be available in a future update.</p>
         </div>
 
         <div className="p-4 border rounded-md bg-card shadow-sm">
-          <h3 className="text-lg font-semibold mb-2 text-primary flex items-center"><UploadCloud className="mr-2 h-5 w-5"/>Data Storage</h3>
-          <p className="text-sm text-muted-foreground">Manage cloud or local storage options, backup, and archiving. (Placeholder)</p>
+          <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><UploadCloud className="mr-2 h-5 w-5"/>Data Storage (Local)</h3>
+           <p className="text-sm text-muted-foreground mb-2">Saved sessions are currently stored in your browser's local storage.</p>
+            <AlertDialog open={showClearStorageDialog} onOpenChange={setShowClearStorageDialog}>
+                <AlertDialogTrigger asChild>
+                    <Button variant="destructive" size="sm">
+                        <Trash2 className="mr-2 h-4 w-4"/> Clear All Saved Sessions (Local)
+                    </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        This action cannot be undone. This will permanently delete all saved sessions from your browser's local storage.
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction onClick={handleClearLocalStorage}>Continue</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
+          <p className="text-xs text-muted-foreground mt-2">Cloud storage options are a future enhancement.</p>
         </div>
          <div className="p-4 border rounded-md bg-card shadow-sm">
           <h3 className="text-lg font-semibold mb-2 text-primary flex items-center"><Palette className="mr-2 h-5 w-5" />Theme</h3>
@@ -1167,6 +1235,7 @@ export default function CourtProceedingsPage() {
                     {activeView === 'userProfile' && "User Profile"}
                  </h2>
                   <div className="ml-auto">
+                      {/* Future global actions can go here */}
                   </div>
              </div>
         </header>
@@ -1212,5 +1281,4 @@ export default function CourtProceedingsPage() {
     </div>
   );
 }
-
     

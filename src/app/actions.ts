@@ -6,10 +6,9 @@ import { smartSearch as aiSmartSearch, SmartSearchInput, SmartSearchOutput } fro
 import { diarizeTranscript as aiDiarizeTranscript, DiarizeTranscriptInput, DiarizeTranscriptOutput, DiarizedSegment } from '@/ai/flows/diarize-transcript-flow';
 
 export async function transcribeAudioAction(
-  audioDataUri: string
+  input: LiveTranscriptionInput
 ): Promise<{ transcription?: string; error?: string }> {
   try {
-    const input: LiveTranscriptionInput = { audioDataUri };
     const result: LiveTranscriptionOutput = await aiLiveTranscription(input);
     return { transcription: result.transcription };
   } catch (error) {
@@ -34,14 +33,11 @@ export async function diarizeTranscriptAction(
   input: DiarizeTranscriptInput
 ): Promise<{ segments?: DiarizedSegment[]; error?: string }> {
   try {
-    // console.log('Calling AI diarization with input:', {audioDataUri: input.audioDataUri.substring(0,100), rawTranscript: input.rawTranscript.substring(0,100) });
     const result: DiarizeTranscriptOutput = await aiDiarizeTranscript(input);
-    // console.log('AI diarization result:', result);
     return { segments: result.diarizedSegments };
   } catch (error) {
     console.error('Error in diarizeTranscriptAction:', error);
     return { error: error instanceof Error ? error.message : 'An unknown error occurred during diarization.' };
   }
 }
-
     

@@ -24,6 +24,7 @@ const DiarizeTranscriptInputSchema = z.object({
   rawTranscript: z
     .string()
     .describe('The complete raw, unformatted text of the transcription.'),
+  customTerms: z.string().optional().describe('A string of custom terms or jargon, separated by commas or newlines, to help guide diarization and ensure correct spelling of specific names or legal phrases.')
 });
 export type DiarizeTranscriptInput = z.infer<typeof DiarizeTranscriptInputSchema>;
 
@@ -69,6 +70,11 @@ Given the full audio of a conversation and its raw, unformatted transcription, y
     - "speaker": A string identifying the speaker (e.g., "Judge Coker", "Counsel Adaobi Okafor", "Witness Chinedu", "Speaker 1").
     - "text": A string containing the transcribed text spoken by that speaker during that segment.
 
+{{#if customTerms}}
+When performing this task, pay special attention to the following custom terms, names, or legal jargon. Prioritize these terms if they appear relevant in the audio or transcript:
+{{{customTerms}}}
+{{/if}}
+
 Here is the audio and the raw transcript:
 Audio: {{media url=audioDataUri}}
 
@@ -96,5 +102,4 @@ const diarizeTranscriptFlow = ai.defineFlow(
     return output;
   }
 );
-
     
