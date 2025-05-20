@@ -146,7 +146,7 @@ export default function CourtProceedingsPage() {
     return () => {
       if (dateTimeIntervalRef.current) clearInterval(dateTimeIntervalRef.current);
     };
-  }, [activeView]); 
+  }, [activeView, selectedInputDevice, selectedOutputDevice]); 
 
   useEffect(() => {
     if (recordingState === 'recording') {
@@ -544,11 +544,11 @@ export default function CourtProceedingsPage() {
               <Separator className="my-3" />
               <h3 className="font-semibold text-sm mb-2">Participants</h3>
               <ul className="space-y-1 text-xs">
-                <li className="flex items-center"><User size={14} className="mr-2 text-primary" /> Justice Smith (Judge)</li>
-                <li className="flex items-center"><User size={14} className="mr-2 text-primary" /> Barr. Adekunle (Prosecution)</li>
-                <li className="flex items-center"><User size={14} className="mr-2 text-primary" /> Barr. Eze (Defense)</li>
-                <li className="flex items-center"><User size={14} className="mr-2 text-primary" /> Mr. Okoro (Defendant)</li>
-                <li className="flex items-center"><User size={14} className="mr-2 text-primary" /> Mrs. Bello (Witness 1)</li>
+                <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Justice Smith (Judge)</li>
+                <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Barr. Adekunle (Prosecution)</li>
+                <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Barr. Eze (Defense)</li>
+                <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Mr. Okoro (Defendant)</li>
+                <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Mrs. Bello (Witness 1)</li>
               </ul>
             </CardContent>
             <CardFooter className="flex-col space-y-2 p-4 border-t bg-muted/50">
