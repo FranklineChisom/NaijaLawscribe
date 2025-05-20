@@ -775,8 +775,8 @@ export default function CourtProceedingsPage() {
 
   const renderLiveSessionHeader = () => (
     <header className="bg-primary text-primary-foreground p-3 md:p-4 shadow-md">
-      <div className="flex flex-wrap justify-between items-center gap-2 md:gap-4">
-        <h1 className="text-xl md:text-2xl font-semibold">Court Recording & Transcription</h1>
+      <div className="flex flex-col sm:flex-row justify-between items-center gap-2 md:gap-4">
+        <h1 className="text-lg sm:text-xl md:text-2xl font-semibold text-center sm:text-left">Court Recording & Transcription</h1>
         <div className="flex items-center space-x-2 md:space-x-4 text-xs md:text-sm">
           {currentDateTime ? (
             <>
@@ -803,12 +803,12 @@ export default function CourtProceedingsPage() {
       
       <div className="flex flex-1 overflow-hidden">
         {/* Left Sidebar - Case Information */}
-        <div className={`w-64 bg-muted/80 p-4 flex-col border-r ${sidebarState === 'collapsed' ? 'hidden' : 'hidden md:flex'}`}> 
+        <div className={`w-full sm:w-64 bg-muted/80 p-2 sm:p-4 flex-col border-r ${sidebarState === 'collapsed' ? 'hidden' : 'hidden md:flex'}`}> 
           <Card className="flex-grow flex flex-col shadow-sm">
-            <CardHeader className="p-4">
-              <CardTitle className="text-lg">Case Details</CardTitle>
+            <CardHeader className="p-3 sm:p-4">
+              <CardTitle className="text-base sm:text-lg">Case Details</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm flex-grow overflow-y-auto px-4 pb-4">
+            <CardContent className="space-y-2 sm:space-y-3 text-xs sm:text-sm flex-grow overflow-y-auto px-3 sm:px-4 pb-3 sm:pb-4">
               <div>
                 <Label htmlFor="case-title" className="text-xs text-muted-foreground">Case Title / Number</Label>
                 <Input 
@@ -861,9 +861,9 @@ export default function CourtProceedingsPage() {
                   suppressHydrationWarning={true}
                 />
               </div>
-              <Separator className="my-3" />
+              <Separator className="my-2 sm:my-3" />
               <h3 className="font-semibold text-sm mb-1">Participants</h3>
-              <div className="space-y-2 max-h-32 overflow-y-auto">
+              <div className="space-y-1 sm:space-y-2 max-h-24 sm:max-h-32 overflow-y-auto">
                 {caseParticipants.map((participant, index) => (
                   <div key={index} className="flex items-center justify-between bg-card p-1.5 rounded border border-border text-xs">
                     <span className="flex items-center"><UserCircle className="mr-1.5 text-primary" size={12} /> {participant}</span>
@@ -897,13 +897,13 @@ export default function CourtProceedingsPage() {
                 </Button>
               </div>
             </CardContent>
-            <CardFooter className="flex-col space-y-2 p-4 border-t bg-muted/50">
-               <Button onClick={handleInitiateSave} disabled={!canSave || isSaving} className="w-full">
+            <CardFooter className="flex-col space-y-2 p-3 sm:p-4 border-t bg-muted/50">
+               <Button onClick={handleInitiateSave} disabled={!canSave || isSaving} className="w-full text-xs sm:text-sm">
                   {isSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save size={16} className="mr-2" />} Save Session
               </Button>
                <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" className="w-full" disabled={!canDownload}>
+                  <Button variant="outline" className="w-full text-xs sm:text-sm" disabled={!canDownload}>
                     <Download size={16} className="mr-2" /> Export
                   </Button>
                 </DropdownMenuTrigger>
@@ -930,24 +930,24 @@ export default function CourtProceedingsPage() {
         </div>
         
         <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="p-4 border-b">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="font-semibold text-lg">Audio Recording</h2>
-              <div className="flex items-center">
-                <span className={`inline-block w-3 h-3 ${recordingState === 'recording' ? 'bg-red-500 animate-pulse' : recordingState === 'paused' ? 'bg-yellow-500' : (isPlayingPlayback ? 'bg-green-500' : 'bg-muted-foreground')} rounded-full mr-2`}></span>
-                <span className="text-sm capitalize">{isPlayingPlayback ? 'Playing' : recordingState}</span>
-                <span className="ml-4 text-sm font-mono tabular-nums">
+          <div className="p-2 sm:p-4 border-b">
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-2">
+              <h2 className="font-semibold text-base sm:text-lg">Audio Recording</h2>
+              <div className="flex items-center text-xs sm:text-sm">
+                <span className={`inline-block w-2 h-2 sm:w-3 sm:h-3 ${recordingState === 'recording' ? 'bg-red-500 animate-pulse' : recordingState === 'paused' ? 'bg-yellow-500' : (isPlayingPlayback ? 'bg-green-500' : 'bg-muted-foreground')} rounded-full mr-2`}></span>
+                <span className="capitalize">{isPlayingPlayback ? 'Playing' : recordingState}</span>
+                <span className="ml-2 sm:ml-4 font-mono tabular-nums">
                  { (recordingState === 'recording' || recordingState === 'paused') ? formatTime(elapsedTime) : (loadedAudioUri || currentRecordingFullAudioUri) ? (audioPlayerRef.current ? formatTime(audioPlayerRef.current.currentTime) + " / " + formatTime(audioPlayerRef.current.duration || 0) : "00:00 / 00:00") : formatTime(elapsedTime) }
                 </span>
               </div>
             </div>
             
             <Card className="shadow-sm">
-              <CardContent className="p-4">
-                <div className="flex-1 flex items-center justify-center my-4">
+              <CardContent className="p-2 sm:p-4">
+                <div className="flex-1 flex items-center justify-center my-2 sm:my-4">
                   <div className="w-full">
-                    <div className="relative w-full h-24 md:h-32 bg-muted/30 rounded-md">
-                      <div className="absolute inset-0 flex items-center justify-center px-2 overflow-hidden">
+                    <div className="relative w-full h-20 sm:h-24 md:h-32 bg-muted/30 rounded-md">
+                      <div className="absolute inset-0 flex items-center justify-center px-1 sm:px-2 overflow-hidden">
                         {waveformRandomValues.length === 80 && Array.from({ length: 80 }).map((_, i) => {
                            const barIsActive = (recordingState === 'recording' || isPlayingPlayback) && i < (elapsedTime % 80); 
                            const randomHeightFactor = waveformRandomValues[i] || 0.5;
@@ -962,7 +962,7 @@ export default function CourtProceedingsPage() {
                               className={`mx-px rounded-sm transition-all duration-150 ease-out ${ recordingState === 'paused' ? 'bg-yellow-500/50' : (barIsActive ? 'bg-primary' : 'bg-primary/50')}`}
                               style={{ 
                                 height: `${dynamicHeight}%`,
-                                width: '3px',
+                                width: '3px', // Keep width consistent for better visual flow on resize
                               }}
                               suppressHydrationWarning={true}
                             />
@@ -994,17 +994,17 @@ export default function CourtProceedingsPage() {
                             />
                         )}
                          {(recordingState !== 'idle' || isPlayingPlayback) && !(currentRecordingFullAudioUri || loadedAudioUri) && (
-                            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                            <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
                                 {recordingState === 'recording' ? "Recording in progress..." : isPlayingPlayback ? "Playing audio..." : "Recording paused..."}
                             </div>
                         )}
                          {recordingState === 'idle' && !isPlayingPlayback && !(currentRecordingFullAudioUri || loadedAudioUri) && (
-                             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
                                 Press Play to start recording.
                             </div>
                          )}
                          {recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri) && !isPlayingPlayback && (
-                             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-sm">
+                             <div className="absolute inset-0 flex items-center justify-center text-muted-foreground text-xs sm:text-sm">
                                 Press Play to listen to the recording.
                             </div>
                          )}
@@ -1012,34 +1012,34 @@ export default function CourtProceedingsPage() {
                   </div>
                 </div>
                 
-                <div className="flex justify-center items-center space-x-2 md:space-x-4 mt-2">
-                  <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground"><SkipBack size={20} /></Button></TooltipTrigger><TooltipContent><p>Previous Segment (Disabled)</p></TooltipContent></Tooltip>
+                <div className="flex justify-center items-center space-x-1 sm:space-x-2 md:space-x-4 mt-2">
+                  <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground h-8 w-8 sm:h-10 sm:w-10"><SkipBack size={16} sm={20} /></Button></TooltipTrigger><TooltipContent><p>Previous Segment (Disabled)</p></TooltipContent></Tooltip>
                    <Button 
                     onClick={toggleMainRecordingOrPlayback}
                     size="lg"
-                    className={`p-3 rounded-full ${recordingState === 'recording' ? 'bg-red-600 hover:bg-red-700' : (recordingState === 'paused' || isPlayingPlayback) ? 'bg-yellow-500 hover:bg-yellow-600 text-yellow-foreground' : 'bg-primary hover:bg-primary/90'} text-primary-foreground w-16 h-16`}
+                    className={`p-2 sm:p-3 rounded-full ${recordingState === 'recording' ? 'bg-red-600 hover:bg-red-700' : (recordingState === 'paused' || isPlayingPlayback) ? 'bg-yellow-500 hover:bg-yellow-600 text-yellow-foreground' : 'bg-primary hover:bg-primary/90'} text-primary-foreground w-12 h-12 sm:w-16 sm:h-16`}
                     aria-label={recordingState === 'recording' ? "Pause Recording" : (recordingState === 'paused' || isPlayingPlayback) ? (isPlayingPlayback ? "Pause Playback" : "Resume Recording") : ((loadedAudioUri || currentRecordingFullAudioUri) ? "Play Recording" : "Start Recording")}
                   >
-                    {(recordingState === 'recording' || isPlayingPlayback) ? <Pause size={28} /> : <Play size={28} />}
+                    {(recordingState === 'recording' || isPlayingPlayback) ? <Pause size={20} sm={28} /> : <Play size={20} sm={28} />}
                   </Button>
                   {((recordingState === 'recording' || recordingState === 'paused') || (isPlayingPlayback && (loadedAudioUri || currentRecordingFullAudioUri))) && (
-                     <Button onClick={handleStopRecording} variant="destructive" size="lg" className="p-3 rounded-full border-destructive text-destructive-foreground hover:bg-destructive/90 w-16 h-16" 
+                     <Button onClick={handleStopRecording} variant="destructive" size="lg" className="p-2 sm:p-3 rounded-full border-destructive text-destructive-foreground hover:bg-destructive/90 w-12 h-12 sm:w-16 sm:h-16" 
                              aria-label={(recordingState === 'recording' || recordingState === 'paused') ? "Stop Recording" : "Stop Playback"}>
-                        <Square size={28}/>
+                        <Square size={20} sm={28}/>
                      </Button>
                   )}
                    {(recordingState === 'idle' && !isPlayingPlayback && (rawTranscript || diarizedTranscript || currentRecordingFullAudioUri || loadedAudioUri || currentSessionTitle !== 'Untitled Session' || caseJudge || caseHearingType || caseCourtroom || caseParticipants.length > 0 || annotations.length > 0)) && ( 
-                        <Button onClick={handleStopRecording} variant="outline" size="lg" className="p-3 rounded-full w-16 h-16" aria-label="Clear Current Session Data">
-                            <Trash2 size={28}/>
+                        <Button onClick={handleStopRecording} variant="outline" size="lg" className="p-2 sm:p-3 rounded-full w-12 h-12 sm:w-16 sm:h-16" aria-label="Clear Current Session Data">
+                            <Trash2 size={20} sm={28}/>
                         </Button>
                     )}
-                  <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground"><SkipForward size={20} /></Button></TooltipTrigger><TooltipContent><p>Next Segment (Disabled)</p></TooltipContent></Tooltip>
+                  <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground h-8 w-8 sm:h-10 sm:w-10"><SkipForward size={16} sm={20} /></Button></TooltipTrigger><TooltipContent><p>Next Segment (Disabled)</p></TooltipContent></Tooltip>
                 </div>
                 
-                <div className="flex flex-wrap justify-between items-center mt-4 text-sm">
-                  <div className="flex items-center">
+                <div className="flex flex-col sm:flex-row justify-between items-center mt-2 sm:mt-4 text-xs sm:text-sm">
+                  <div className="flex items-center mb-2 sm:mb-0">
                     <Button variant="outline" size="sm" className="mr-2" disabled>
-                      {(recordingState !== 'idle' || isPlayingPlayback) ? <Mic size={16} className="text-green-500" /> : <MicOff size={16} />} 
+                      {(recordingState !== 'idle' || isPlayingPlayback) ? <Mic size={14} sm={16} className="text-green-500" /> : <MicOff size={14} sm={16} />} 
                       <span className="ml-1">{(recordingState !== 'idle') ? "Mic Active" : (isPlayingPlayback ? "Audio Playing" : "Mic Off")}</span>
                     </Button>
                      <div className="flex items-center space-x-2">
@@ -1047,9 +1047,9 @@ export default function CourtProceedingsPage() {
                         <Label htmlFor="auto-transcription-toggle" className="text-xs">Auto Transcribe</Label>
                       </div>
                   </div>
-                  <div className="flex space-x-2 mt-2 sm:mt-0">
-                    <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => setActiveView('settings')}><Headphones size={18}/></Button></TooltipTrigger><TooltipContent><p>Audio Input/Output Settings</p></TooltipContent></Tooltip>
-                    <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground"><Info size={18} /></Button></TooltipTrigger><TooltipContent><p>Session Info (Placeholder)</p></TooltipContent></Tooltip>
+                  <div className="flex space-x-1 sm:space-x-2 mt-2 sm:mt-0">
+                    <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => setActiveView('settings')} className="h-7 w-7 sm:h-8 sm:w-8"><Headphones size={16} sm={18}/></Button></TooltipTrigger><TooltipContent><p>Audio Input/Output Settings</p></TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground h-7 w-7 sm:h-8 sm:w-8"><Info size={16} sm={18} /></Button></TooltipTrigger><TooltipContent><p>Session Info (Placeholder)</p></TooltipContent></Tooltip>
                   </div>
                 </div>
                  {(isTranscribingChunk || (recordingState === 'recording' && !isTranscribingChunk && autoTranscription)) && (
@@ -1064,16 +1064,16 @@ export default function CourtProceedingsPage() {
             </Card>
           </div>
           
-          <div className="flex-1 p-4 flex flex-col overflow-hidden">
-            <div className="flex items-center justify-between mb-2">
-              <h2 className="font-semibold text-lg">Real-time Transcript</h2>
-              <div className="relative">
+          <div className="flex-1 p-2 sm:p-4 flex flex-col overflow-hidden">
+            <div className="flex flex-col sm:flex-row items-center justify-between mb-2">
+              <h2 className="font-semibold text-base sm:text-lg mb-1 sm:mb-0">Real-time Transcript</h2>
+              <div className="relative w-full sm:w-auto">
                 <Input 
                   type="text" 
                   placeholder="Search transcript..." 
                   value={transcriptSearchTerm}
                   onChange={(e) => setTranscriptSearchTerm(e.target.value)}
-                  className="pl-8 pr-4 py-1 text-sm h-8 w-48 md:w-64 bg-card border-border focus:border-primary"
+                  className="pl-8 pr-4 py-1 text-sm h-8 w-full sm:w-48 md:w-64 bg-card border-border focus:border-primary"
                   suppressHydrationWarning={true}
                 />
                 <Search size={16} className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
@@ -1083,7 +1083,7 @@ export default function CourtProceedingsPage() {
             <Card className="flex-1 shadow-sm overflow-hidden">
               <CardContent className="h-full p-0">
                 <ScrollArea ref={liveTranscriptScrollAreaRef} className="h-full w-full rounded-md">
-                  <div className="p-4 space-y-3 font-mono text-sm">
+                  <div className="p-2 sm:p-4 space-y-3 font-mono text-xs sm:text-sm">
                     {diarizedTranscript ? (
                        diarizedTranscript.map((segment, index) => (
                           (!transcriptSearchTerm || segment.text.toLowerCase().includes(transcriptSearchTerm.toLowerCase()) || segment.speaker.toLowerCase().includes(transcriptSearchTerm.toLowerCase())) && (
@@ -1116,13 +1116,13 @@ export default function CourtProceedingsPage() {
           </div>
         </div>
         
-        <div className={`w-72 bg-muted/80 p-4 border-l ${sidebarState === 'collapsed' ? 'hidden' : 'hidden lg:flex'} flex-col`}> 
+        <div className={`w-full sm:w-72 bg-muted/80 p-2 sm:p-4 border-l ${sidebarState === 'collapsed' ? 'hidden' : 'hidden lg:flex'} flex-col`}> 
           <Card className="flex-grow flex flex-col shadow-sm">
-            <CardHeader className="p-4">
-              <CardTitle className="text-lg">Annotations</CardTitle>
+            <CardHeader className="p-3 sm:p-4">
+              <CardTitle className="text-base sm:text-lg">Annotations</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-3 text-sm flex-grow overflow-y-auto px-4 pb-4">
-              <div className="mb-4">
+            <CardContent className="space-y-2 sm:space-y-3 text-xs sm:text-sm flex-grow overflow-y-auto px-3 sm:px-4 pb-3 sm:pb-4">
+              <div className="mb-2 sm:mb-4">
                 <Label htmlFor="annotation-text" className="block text-xs font-medium text-muted-foreground mb-1">Add Note</Label>
                 <Textarea 
                   id="annotation-text"
@@ -1150,10 +1150,10 @@ export default function CourtProceedingsPage() {
                 </div>
               </div>
               
-              <Separator className="my-3"/>
+              <Separator className="my-2 sm:my-3"/>
               <h3 className="font-medium text-sm text-primary">Recent Annotations</h3>
               {annotations.length > 0 ? (
-                <ScrollArea className="h-40"> {/* Adjusted height */}
+                <ScrollArea className="h-32 sm:h-40"> {/* Adjusted height */}
                   <div className="space-y-2">
                   {annotations.slice(0, 5).map(ann => ( // Show recent 5, more in dialog
                     <div key={ann.id} className="bg-card p-2.5 rounded border text-xs shadow-sm">
@@ -1168,19 +1168,19 @@ export default function CourtProceedingsPage() {
                 <p className="text-xs text-muted-foreground text-center py-4">No annotations yet.</p>
               )}
 
-              <div className="mt-4">
+              <div className="mt-2 sm:mt-4">
                 <h3 className="font-medium text-sm text-primary mb-2">Quick Tags</h3>
                   <div className="flex flex-wrap gap-1">
                       {quickTagsList.map(tag => (
-                          <Button key={tag} variant="outline" size="sm" className="text-xs" onClick={() => handleAddQuickTag(tag)}>
+                          <Button key={tag} variant="outline" size="sm" className="text-xs px-1.5 py-0.5 sm:px-2 sm:py-1" onClick={() => handleAddQuickTag(tag)}>
                             <Tag size={12} className="mr-1"/> {tag}
                           </Button>
                       ))}
                   </div>
               </div>
             </CardContent>
-             <CardFooter className="p-4 border-t bg-muted/50">
-                <Button variant="outline" className="w-full text-xs" onClick={() => setShowAllAnnotationsDialog(true)} disabled={annotations.length === 0}>
+             <CardFooter className="p-3 sm:p-4 border-t bg-muted/50">
+                <Button variant="outline" className="w-full text-xs sm:text-sm" onClick={() => setShowAllAnnotationsDialog(true)} disabled={annotations.length === 0}>
                     <ListChecks size={14} className="mr-1.5"/> View All Notes ({annotations.length})
                 </Button>
             </CardFooter>
@@ -1188,14 +1188,14 @@ export default function CourtProceedingsPage() {
         </div>
       </div>
       
-      <footer className="bg-muted/50 p-2 border-t flex flex-wrap justify-between items-center text-xs text-muted-foreground">
-        <div className="flex items-center">
+      <footer className="bg-muted/50 p-2 border-t flex flex-col sm:flex-row justify-between items-center text-xs text-muted-foreground">
+        <div className="flex items-center mb-1 sm:mb-0">
           <span className={`inline-block w-2 h-2 ${recordingState !== 'idle' || isPlayingPlayback ? 'bg-green-500 animate-pulse' : 'bg-muted-foreground'} rounded-full mr-2`}></span>
           <span>System Status: {recordingState !== 'idle' || isPlayingPlayback ? 'Online & Active' : 'Online'}</span>
         </div>
-        <div className="flex space-x-3">
-          <span>Storage: Local (Placeholder)</span>
-          <span>Backup: N/A (Placeholder)</span>
+        <div className="flex flex-col sm:flex-row space-y-1 sm:space-y-0 sm:space-x-3 text-center sm:text-left">
+          <span>Storage: Local</span>
+          <span>Backup: N/A</span>
         </div>
       </footer>
     </div>
@@ -1203,18 +1203,18 @@ export default function CourtProceedingsPage() {
 
   const renderRecordingsView = () => (
     <Card className="shadow-lg h-full flex flex-col">
-      <CardHeader>
-        <CardTitle className="text-xl flex items-center"><FolderOpen className="mr-2 h-6 w-6 text-primary" />Saved Sessions</CardTitle>
-        <CardDescription>Load or delete previously saved court proceeding transcripts, audio, and annotations.</CardDescription>
+      <CardHeader className="p-4 md:p-6">
+        <CardTitle className="text-lg md:text-xl flex items-center"><FolderOpen className="mr-2 h-5 w-5 md:h-6 md:w-6 text-primary" />Saved Sessions</CardTitle>
+        <CardDescription className="text-xs md:text-sm">Load or delete previously saved court proceeding transcripts, audio, and annotations.</CardDescription>
       </CardHeader>
-      <CardContent className="flex-grow overflow-auto p-4">
+      <CardContent className="flex-grow overflow-auto p-2 md:p-4">
         {savedTranscripts.length > 0 ? (
-          <ScrollArea className="h-full max-h-[calc(100vh-220px)]"> 
-            <ul className="space-y-3">
+          <ScrollArea className="h-full max-h-[calc(100vh-200px)] md:max-h-[calc(100vh-220px)]"> 
+            <ul className="space-y-2 md:space-y-3">
               {savedTranscripts.sort((a,b) => b.timestamp - a.timestamp).map(st => (
-                <li key={st.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-md hover:bg-muted/50 transition-colors shadow-sm bg-card">
+                <li key={st.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-2 md:p-3 border rounded-md hover:bg-muted/50 transition-colors shadow-sm bg-card">
                   <div className="mb-2 sm:mb-0">
-                    <p className="font-medium">{st.title}</p>
+                    <p className="font-medium text-sm md:text-base">{st.title}</p>
                     <p className="text-xs text-muted-foreground">
                       {new Date(st.timestamp).toLocaleString()}
                       {st.diarizedTranscript ? ' (Diarized)' : ' (Raw transcript)'}
@@ -1222,19 +1222,19 @@ export default function CourtProceedingsPage() {
                       {st.annotations && st.annotations.length > 0 ? ` (${st.annotations.length} notes)` : ''}
                     </p>
                   </div>
-                  <div className="flex gap-2">
+                  <div className="flex gap-2 mt-2 sm:mt-0">
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="outline" size="sm" onClick={() => handleLoadSavedTranscript(st)} aria-label={`Load ${st.title}`}>
-                          <FileText className="h-4 w-4 mr-1"/> Load
+                        <Button variant="outline" size="sm" onClick={() => handleLoadSavedTranscript(st)} aria-label={`Load ${st.title}`} className="text-xs md:text-sm">
+                          <FileText className="h-3 w-3 md:h-4 md:w-4 mr-1"/> Load
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Load this session</p></TooltipContent>
                     </Tooltip>
                     <Tooltip>
                       <TooltipTrigger asChild>
-                        <Button variant="destructive" size="sm" onClick={() => handleDeleteSavedTranscript(st.id)} aria-label={`Delete ${st.title}`}>
-                          <Trash2 className="h-4 w-4 mr-1"/> Delete
+                        <Button variant="destructive" size="sm" onClick={() => handleDeleteSavedTranscript(st.id)} aria-label={`Delete ${st.title}`} className="text-xs md:text-sm">
+                          <Trash2 className="h-3 w-3 md:h-4 md:w-4 mr-1"/> Delete
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent><p>Delete this session</p></TooltipContent>
@@ -1245,9 +1245,10 @@ export default function CourtProceedingsPage() {
             </ul>
           </ScrollArea>
         ) : (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <FolderOpen className="w-16 h-16 mb-4 opacity-50" />
-            <p className="text-center py-8">No saved sessions yet. Recordings from the 'Live Session' tab can be saved here.</p>
+          <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
+            <FolderOpen className="w-12 h-12 md:w-16 md:h-16 mb-4 opacity-50" />
+            <p className="text-center text-sm md:text-base">No saved sessions yet.</p>
+            <p className="text-xs md:text-sm text-center mt-1">Recordings from the 'Live Session' tab can be saved here.</p>
           </div>
         )}
       </CardContent>
@@ -1256,21 +1257,19 @@ export default function CourtProceedingsPage() {
 
   const renderTranscriptionsView = () => (
      <Card className="shadow-lg h-full flex flex-col">
-      <CardHeader>
-        <CardTitle className="text-xl flex items-center">
-            <ListOrdered className="mr-2 h-6 w-6 text-primary" /> 
-            Active Transcript: <span className="ml-2 font-normal text-lg">{currentSessionTitle || "Untitled Session"}</span>
+      <CardHeader className="p-4 md:p-6">
+        <CardTitle className="text-lg md:text-xl flex items-center">
+            <ListOrdered className="mr-2 h-5 w-5 md:h-6 md:w-6 text-primary" /> 
+            Active Transcript: <span className="ml-2 font-normal text-base md:text-lg">{currentSessionTitle || "Untitled Session"}</span>
         </CardTitle>
-        <CardDescription>Review the current transcript. Diarization attempts to run automatically if audio is available. Use controls to save or download.</CardDescription>
+        <CardDescription className="text-xs md:text-sm">Review the current transcript. Diarization attempts to run automatically if audio is available. Use controls to save or download.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4 flex-grow overflow-auto p-4">
+      <CardContent className="space-y-3 md:space-y-4 flex-grow overflow-auto p-2 md:p-4">
         {(currentRecordingFullAudioUri || loadedAudioUri) && (
           <div>
-            <h3 className="text-md font-semibold mb-1 text-primary">Audio Playback</h3>
+            <h3 className="text-sm md:text-md font-semibold mb-1 text-primary">Audio Playback</h3>
              <audio 
                 ref={el => { 
-                  // Ensure the ref is correctly assigned if the view is re-rendered.
-                  // This is a common pattern if the audio element might not always be in the DOM for this view.
                   if (el && activeView === 'transcriptions') audioPlayerRef.current = el;
                 }}
                 src={loadedAudioUri || currentRecordingFullAudioUri || undefined} 
@@ -1286,17 +1285,17 @@ export default function CourtProceedingsPage() {
         )}
         <div>
             <div className="flex justify-between items-center mb-1">
-                 <h3 className="text-md font-semibold text-primary">
+                 <h3 className="text-sm md:text-md font-semibold text-primary">
                     {diarizedTranscript ? "Diarized Transcript" : "Raw Transcript"}
                  </h3>
                  <div className="flex items-center gap-2">
-                    {diarizedTranscript && <Users className="h-5 w-5 text-primary" />}
-                    {isDiarizing && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
+                    {diarizedTranscript && <Users className="h-4 w-4 md:h-5 md:w-5 text-primary" />}
+                    {isDiarizing && <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin text-primary" />}
                  </div>
             </div>
-          <ScrollArea ref={transcriptScrollAreaRef} className="h-[calc(100vh-450px)] w-full rounded-md border p-3 bg-muted/30"> 
+          <ScrollArea ref={transcriptScrollAreaRef} className="h-[calc(100vh-350px)] sm:h-[calc(100vh-400px)] md:h-[calc(100vh-450px)] w-full rounded-md border p-2 md:p-3 bg-muted/30"> 
             {diarizedTranscript ? (
-              <div className="space-y-3 font-mono text-sm">
+              <div className="space-y-3 font-mono text-xs md:text-sm">
                 {diarizedTranscript.map((segment, index) => (
                   <div key={index}>
                     <strong className={`${getSpeakerColor(segment.speaker)} font-semibold`}>{segment.speaker}:</strong>
@@ -1305,42 +1304,43 @@ export default function CourtProceedingsPage() {
                 ))}
               </div>
             ) : rawTranscript ? (
-              <pre className="text-sm whitespace-pre-wrap font-mono leading-relaxed">
+              <pre className="text-xs md:text-sm whitespace-pre-wrap font-mono leading-relaxed">
                 {rawTranscript}
                 {isDiarizing && !diarizedTranscript && <span className="block mt-2 text-muted-foreground"><Loader2 className="inline h-4 w-4 animate-spin mr-1" /> Attempting automatic diarization...</span>}
               </pre>
             ) : (
-                <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-                    <FileText className="w-16 h-16 mb-4 opacity-50" />
-                    <span className="text-center">No transcript available. Record a new session or load one from 'Recordings'.</span>
+                <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
+                    <FileText className="w-12 h-12 md:w-16 md:h-16 mb-4 opacity-50" />
+                    <span className="text-center text-sm md:text-base">No transcript available.</span> 
+                    <span className="text-center text-xs md:text-sm mt-1">Record a new session or load one.</span>
                 </div>
             )}
           </ScrollArea>
         </div>
       </CardContent>
-       <CardFooter className="border-t p-4 flex flex-wrap gap-2 items-center bg-muted/50">
+       <CardFooter className="border-t p-2 md:p-4 flex flex-wrap gap-2 items-center bg-muted/50">
             <Tooltip>
                 <TooltipTrigger asChild>
-                <Button onClick={() => handleDiarizeTranscript(currentRecordingFullAudioUri || loadedAudioUri, rawTranscript)} disabled={!canManuallyDiarize} variant="outline" aria-label="Diarize Transcript Manually">
-                    {isDiarizing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Users className="h-5 w-5" />} 
-                    <span className="ml-2 hidden sm:inline">Diarize</span>
+                <Button onClick={() => handleDiarizeTranscript(currentRecordingFullAudioUri || loadedAudioUri, rawTranscript)} disabled={!canManuallyDiarize} variant="outline" aria-label="Diarize Transcript Manually" size="sm">
+                    {isDiarizing ? <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin" /> : <Users className="h-4 w-4 md:h-5 md:w-5" />} 
+                    <span className="ml-1 md:ml-2 hidden sm:inline">Diarize</span>
                 </Button>
                 </TooltipTrigger>
                 <TooltipContent><p>Manually re-run speaker identification</p></TooltipContent>
             </Tooltip>
             <Tooltip>
                 <TooltipTrigger asChild>
-                <Button onClick={handleInitiateSave} disabled={!canSave || isSaving} aria-label="Save Transcript">
-                    {isSaving ? <Loader2 className="h-5 w-5 animate-spin" /> : <Save className="h-5 w-5" />} 
-                     <span className="ml-2 hidden sm:inline">Save Session</span>
+                <Button onClick={handleInitiateSave} disabled={!canSave || isSaving} aria-label="Save Transcript" size="sm">
+                    {isSaving ? <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin" /> : <Save className="h-4 w-4 md:h-5 md:w-5" />} 
+                     <span className="ml-1 md:ml-2 hidden sm:inline">Save Session</span>
                 </Button>
                 </TooltipTrigger>
                 <TooltipContent><p>Save current transcript and audio</p></TooltipContent>
             </Tooltip>
              <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="outline" disabled={!canDownload}>
-                    <Download size={16} className="mr-1" /> <span className="hidden sm:inline">Export</span>
+                  <Button variant="outline" disabled={!canDownload} size="sm">
+                    <Download size={14} md={16} className="mr-1" /> <span className="hidden sm:inline">Export</span>
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
@@ -1360,7 +1360,7 @@ export default function CourtProceedingsPage() {
                 </DropdownMenuContent>
               </DropdownMenu>
             {isDiarizing && (
-            <div className="flex items-center text-sm text-muted-foreground ml-auto">
+            <div className="flex items-center text-xs md:text-sm text-muted-foreground ml-auto">
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
                 <span>Identifying speakers... This may take a few moments.</span>
             </div>
@@ -1371,11 +1371,11 @@ export default function CourtProceedingsPage() {
 
   const renderSearchView = () => (
     <Card className="shadow-lg h-full flex flex-col">
-      <CardHeader>
-        <CardTitle className="text-xl flex items-center"><Search className="mr-2 h-6 w-6 text-primary" />Smart Case Search</CardTitle>
-        <CardDescription>Search the active transcript for keywords, phrases, or legal references.</CardDescription>
+      <CardHeader className="p-4 md:p-6">
+        <CardTitle className="text-lg md:text-xl flex items-center"><Search className="mr-2 h-5 w-5 md:h-6 md:w-6 text-primary" />Smart Case Search</CardTitle>
+        <CardDescription className="text-xs md:text-sm">Search the active transcript for keywords, phrases, or legal references.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-4 flex-grow overflow-auto p-4">
+      <CardContent className="space-y-3 md:space-y-4 flex-grow overflow-auto p-2 md:p-4">
         <div className="flex gap-2">
           <Input
             type="text"
@@ -1393,17 +1393,17 @@ export default function CourtProceedingsPage() {
           </Button>
         </div>
         {searchError && (
-          <div className="text-destructive-foreground p-3 bg-destructive/80 border border-destructive rounded-md flex items-center gap-2">
+          <div className="text-destructive-foreground p-3 bg-destructive/80 border border-destructive rounded-md flex items-center gap-2 text-xs md:text-sm">
             <AlertTriangle className="h-5 w-5" /> {searchError}
           </div>
         )}
         {searchResults ? (
           searchResults.searchResults.length > 0 ? (
             <div className="space-y-3 p-3 bg-primary/10 border border-primary/30 rounded-md">
-                <h3 className="font-semibold text-lg text-primary">Search Results:</h3>
-                <p className="text-sm italic text-muted-foreground">{searchResults.summary}</p>
-                <ScrollArea className="h-60 border rounded-md p-2 bg-background"> 
-                    <ul className="list-disc list-inside space-y-1 text-sm pl-2">
+                <h3 className="font-semibold text-base md:text-lg text-primary">Search Results:</h3>
+                <p className="text-xs md:text-sm italic text-muted-foreground">{searchResults.summary}</p>
+                <ScrollArea className="h-40 md:h-60 border rounded-md p-2 bg-background"> 
+                    <ul className="list-disc list-inside space-y-1 text-xs md:text-sm pl-2">
                     {searchResults.searchResults.map((result, index) => (
                         <li key={index} className="py-1 border-b border-border last:border-b-0">{result}</li>
                     ))}
@@ -1412,24 +1412,24 @@ export default function CourtProceedingsPage() {
             </div>
             ) : (
                 <div className="text-center py-8 text-muted-foreground">
-                    <Search className="w-16 h-16 mb-4 mx-auto opacity-50" />
-                    <p>No results found for "{searchTerm}".</p>
+                    <Search className="w-12 h-12 md:w-16 md:h-16 mb-4 mx-auto opacity-50" />
+                    <p className="text-sm md:text-base">No results found for "{searchTerm}".</p>
                     <p className="text-xs mt-1">{searchResults.summary || "Please try a different term."}</p>
                 </div>
             )
         ) : isSearching ? (
              <div className="text-center py-8 text-muted-foreground">
-                <Loader2 className="w-12 h-12 mb-4 mx-auto animate-spin text-primary" />
+                <Loader2 className="w-10 h-10 md:w-12 md:h-12 mb-4 mx-auto animate-spin text-primary" />
                 <p>Searching...</p>
             </div>
         ) : (
              <div className="text-center py-8 text-muted-foreground">
-                <Search className="w-16 h-16 mb-4 mx-auto opacity-30" />
-                <p>Enter a term to search the current active transcript.</p>
+                <Search className="w-12 h-12 md:w-16 md:h-16 mb-4 mx-auto opacity-30" />
+                <p className="text-sm md:text-base">Enter a term to search the current active transcript.</p>
             </div>
         )}
       </CardContent>
-      <CardFooter className="border-t p-4 bg-muted/50">
+      <CardFooter className="border-t p-2 md:p-4 bg-muted/50">
         <p className="text-xs text-muted-foreground">Search results are powered by AI for contextual understanding.</p>
       </CardFooter>
     </Card>
@@ -1437,47 +1437,47 @@ export default function CourtProceedingsPage() {
 
  const renderSettingsView = () => (
     <Card className="shadow-lg h-full">
-      <CardHeader>
-        <CardTitle className="text-xl flex items-center"><Settings className="mr-2 h-6 w-6 text-primary" />Application Settings</CardTitle>
-        <CardDescription>Configure application preferences.</CardDescription>
+      <CardHeader className="p-4 md:p-6">
+        <CardTitle className="text-lg md:text-xl flex items-center"><Settings className="mr-2 h-5 w-5 md:h-6 md:w-6 text-primary" />Application Settings</CardTitle>
+        <CardDescription className="text-xs md:text-sm">Configure application preferences.</CardDescription>
       </CardHeader>
-      <CardContent className="space-y-6 p-4 overflow-y-auto max-h-[calc(100vh-180px)]">
-        <div className="p-4 border rounded-md bg-card shadow-sm">
-          <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><Headphones className="mr-2 h-5 w-5" />Audio Configuration</h3>
-          <div className="space-y-4">
+      <CardContent className="space-y-4 md:space-y-6 p-2 md:p-4 overflow-y-auto max-h-[calc(100vh-160px)] md:max-h-[calc(100vh-180px)]">
+        <div className="p-3 md:p-4 border rounded-md bg-card shadow-sm">
+          <h3 className="text-base md:text-lg font-semibold mb-3 text-primary flex items-center"><Headphones className="mr-2 h-5 w-5" />Audio Configuration</h3>
+          <div className="space-y-3 md:space-y-4">
             <div>
-              <Label htmlFor="audio-input-select" className="text-sm font-medium">Audio Input Device</Label>
+              <Label htmlFor="audio-input-select" className="text-xs md:text-sm font-medium">Audio Input Device</Label>
               <Select value={selectedInputDevice} onValueChange={setSelectedInputDevice} disabled={recordingState !== 'idle'}>
                 <SelectTrigger id="audio-input-select" className="mt-1">
                   <SelectValue placeholder="Select input device..." />
                 </SelectTrigger>
                 <SelectContent>
                   {audioInputDevices.length > 0 ? audioInputDevices.map(device => (
-                    <SelectItem key={device.deviceId} value={device.deviceId}>
+                    <SelectItem key={device.deviceId} value={device.deviceId} className="text-xs md:text-sm">
                       {device.label || `Input Device ${device.deviceId.substring(0,8)}`}
                     </SelectItem>
-                  )) : <SelectItem value="no-input" disabled>No input devices found. Grant mic permission.</SelectItem>}
+                  )) : <SelectItem value="no-input" disabled className="text-xs md:text-sm">No input devices found. Grant mic permission.</SelectItem>}
                 </SelectContent>
               </Select>
             </div>
             <div>
-              <Label htmlFor="audio-output-select" className="text-sm font-medium">Audio Output Device (System Controlled)</Label>
+              <Label htmlFor="audio-output-select" className="text-xs md:text-sm font-medium">Audio Output Device (System Controlled)</Label>
               <Select value={selectedOutputDevice} onValueChange={setSelectedOutputDevice} disabled>
                 <SelectTrigger id="audio-output-select" className="mt-1">
                   <SelectValue placeholder={audioOutputDevices.find(d=>d.deviceId === 'default')?.label || "System Default Output"} />
                 </SelectTrigger>
                 <SelectContent>
                   {audioOutputDevices.length > 0 ? audioOutputDevices.map(device => (
-                    <SelectItem key={device.deviceId} value={device.deviceId}>
+                    <SelectItem key={device.deviceId} value={device.deviceId} className="text-xs md:text-sm">
                       {device.label || `Output Device ${device.deviceId.substring(0,8)}`}
                     </SelectItem>
-                  )) : <SelectItem value="no-output" disabled>No output devices found</SelectItem>}
+                  )) : <SelectItem value="no-output" disabled className="text-xs md:text-sm">No output devices found</SelectItem>}
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground mt-1">Note: Output device selection is typically controlled by your OS/browser.</p>
             </div>
             <div className="flex items-center justify-between pt-2">
-              <Label htmlFor="noise-cancellation-switch" className="text-sm font-medium">Enable Noise Cancellation (Placeholder)</Label>
+              <Label htmlFor="noise-cancellation-switch" className="text-xs md:text-sm font-medium">Enable Noise Cancellation (Placeholder)</Label>
               <Switch 
                 id="noise-cancellation-switch" 
                 checked={noiseCancellationEnabled} 
@@ -1489,36 +1489,36 @@ export default function CourtProceedingsPage() {
           </div>
         </div>
 
-        <div className="p-4 border rounded-md bg-card shadow-sm">
-          <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><FileText className="mr-2 h-5 w-5" />Transcription Models</h3>
-          <div className="space-y-4">
+        <div className="p-3 md:p-4 border rounded-md bg-card shadow-sm">
+          <h3 className="text-base md:text-lg font-semibold mb-3 text-primary flex items-center"><FileText className="mr-2 h-5 w-5" />Transcription Models</h3>
+          <div className="space-y-3 md:space-y-4">
              <div>
-                <Label htmlFor="custom-legal-terms" className="text-sm font-medium">Custom Legal Terms & Jargon</Label>
+                <Label htmlFor="custom-legal-terms" className="text-xs md:text-sm font-medium">Custom Legal Terms & Jargon</Label>
                 <Textarea 
                     id="custom-legal-terms"
                     placeholder="Enter terms, one per line or comma-separated (e.g., res ipsa loquitur, voir dire, Obong Effiong Bassey)"
                     value={customLegalTerms}
                     onChange={(e) => setCustomLegalTerms(e.target.value)}
-                    className="mt-1"
+                    className="mt-1 text-sm"
                     rows={5}
                 />
                 <p className="text-xs text-muted-foreground mt-1">These terms will be prioritized by the AI during transcription and diarization. Saved locally in your browser.</p>
-                 <Button onClick={handleSaveCustomTerms} size="sm" className="mt-2">
+                 <Button onClick={handleSaveCustomTerms} size="sm" className="mt-2 text-xs md:text-sm">
                     <Save className="mr-2 h-4 w-4"/> Save Custom Terms
                 </Button>
             </div>
-            <Button variant="outline" disabled className="w-full justify-start text-left">
+            <Button variant="outline" disabled className="w-full justify-start text-left text-xs md:text-sm">
               <Sigma className="mr-2 h-4 w-4" /> Select Language Model (Default - Placeholder)
             </Button>
-             <Button variant="outline" disabled className="w-full justify-start text-left">
+             <Button variant="outline" disabled className="w-full justify-start text-left text-xs md:text-sm">
               <PlusCircle className="mr-2 h-4 w-4" /> Upload Custom Dictionary (Placeholder)
             </Button>
           </div>
         </div>
         
-        <div className="p-4 border rounded-md bg-card shadow-sm">
-            <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><Palette className="mr-2 h-5 w-5" />Theme</h3>
-            <RadioGroup value={theme} onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}>
+        <div className="p-3 md:p-4 border rounded-md bg-card shadow-sm">
+            <h3 className="text-base md:text-lg font-semibold mb-3 text-primary flex items-center"><Palette className="mr-2 h-5 w-5" />Theme</h3>
+            <RadioGroup value={theme} onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')} className="text-xs md:text-sm">
                 <div className="flex items-center space-x-2">
                     <RadioGroupItem value="light" id="theme-light" />
                     <Label htmlFor="theme-light" className="flex items-center gap-2"><Sun size={16}/> Light</Label>
@@ -1535,12 +1535,12 @@ export default function CourtProceedingsPage() {
             <p className="text-xs text-muted-foreground mt-2">Select your preferred application theme. Your choice is saved locally.</p>
         </div>
 
-        <div className="p-4 border rounded-md bg-card shadow-sm">
-          <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><UploadCloud className="mr-2 h-5 w-5"/>Data Storage</h3>
-           <p className="text-sm text-muted-foreground mb-2">Saved sessions and custom terms are currently stored in your browser's local storage.</p>
+        <div className="p-3 md:p-4 border rounded-md bg-card shadow-sm">
+          <h3 className="text-base md:text-lg font-semibold mb-3 text-primary flex items-center"><UploadCloud className="mr-2 h-5 w-5"/>Data Storage</h3>
+           <p className="text-xs md:text-sm text-muted-foreground mb-2">Saved sessions and custom terms are currently stored in your browser's local storage.</p>
             <AlertDialog open={showClearStorageDialog} onOpenChange={setShowClearStorageDialog}>
                 <AlertDialogTrigger asChild>
-                    <Button variant="destructive" size="sm">
+                    <Button variant="destructive" size="sm" className="text-xs md:text-sm">
                         <Trash2 className="mr-2 h-4 w-4"/> Clear All Saved Data (Local)
                     </Button>
                 </AlertDialogTrigger>
@@ -1557,10 +1557,10 @@ export default function CourtProceedingsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
-            <Button variant="outline" disabled className="mt-2 w-full justify-start text-left">
+            <Button variant="outline" disabled className="mt-2 w-full justify-start text-left text-xs md:text-sm">
               <Briefcase className="mr-2 h-4 w-4"/> Configure Cloud Storage (Placeholder)
             </Button>
-            <Button variant="outline" disabled className="mt-2 w-full justify-start text-left">
+            <Button variant="outline" disabled className="mt-2 w-full justify-start text-left text-xs md:text-sm">
                <Clock className="mr-2 h-4 w-4"/> Backup & Archiving Settings (Placeholder)
             </Button>
           <p className="text-xs text-muted-foreground mt-2">Cloud storage options are a future enhancement.</p>
@@ -1572,14 +1572,14 @@ export default function CourtProceedingsPage() {
 
   const renderUserProfileView = () => (
      <Card className="shadow-lg h-full">
-      <CardHeader>
-        <CardTitle className="text-xl flex items-center"><UserCircle className="mr-2 h-6 w-6 text-primary" />User Profile</CardTitle>
-        <CardDescription>Manage your profile information (Placeholder).</CardDescription>
+      <CardHeader className="p-4 md:p-6">
+        <CardTitle className="text-lg md:text-xl flex items-center"><UserCircle className="mr-2 h-5 w-5 md:h-6 md:w-6 text-primary" />User Profile</CardTitle>
+        <CardDescription className="text-xs md:text-sm">Manage your profile information (Placeholder).</CardDescription>
       </CardHeader>
-      <CardContent className="p-4">
-        <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-8 border rounded-md bg-card">
-            <UserCircle className="w-24 h-24 mb-6 opacity-50" />
-            <p className="text-center">User authentication and profile management features will be available here in a future update.</p>
+      <CardContent className="p-2 md:p-4">
+        <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4 md:p-8 border rounded-md bg-card">
+            <UserCircle className="w-16 h-16 md:w-24 md:h-24 mb-4 md:mb-6 opacity-50" />
+            <p className="text-center text-sm md:text-base">User authentication and profile management features will be available here in a future update.</p>
         </div>
       </CardContent>
     </Card>
@@ -1588,13 +1588,13 @@ export default function CourtProceedingsPage() {
   return (
     <div className="flex min-h-screen bg-background text-foreground">
       <Sidebar side="left" variant="sidebar" collapsible="icon" className="border-r shadow-md bg-sidebar text-sidebar-foreground">
-        <SidebarHeader className="p-4">
+        <SidebarHeader className="p-2 sm:p-4">
            <div className="flex items-center gap-2">
-             <Landmark className={`h-8 w-8 text-sidebar-primary transition-all ${sidebarOpen ? "" : "ml-1"}`} />
-             <h1 className={`text-2xl font-bold tracking-tight text-sidebar-primary ${sidebarOpen ? "opacity-100" : "opacity-0 hidden group-hover:opacity-100 group-hover:block transition-opacity duration-300"}`}>VeriCourt</h1>
+             <Landmark className={`h-7 w-7 sm:h-8 sm:w-8 text-sidebar-primary transition-all ${sidebarOpen ? "" : "ml-1"}`} />
+             <h1 className={`text-xl sm:text-2xl font-bold tracking-tight text-sidebar-primary ${sidebarOpen ? "opacity-100" : "opacity-0 hidden group-hover:opacity-100 group-hover:block transition-opacity duration-300"}`}>VeriCourt</h1>
            </div>
         </SidebarHeader>
-        <SidebarContent className="p-2">
+        <SidebarContent className="p-1 sm:p-2">
           <SidebarMenu>
             <SidebarMenuItem>
               <SidebarMenuButton onClick={() => setActiveView('liveSession')} isActive={activeView === 'liveSession'} tooltip="Live Session">
@@ -1618,7 +1618,7 @@ export default function CourtProceedingsPage() {
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarContent>
-        <SidebarFooter className="p-2 border-t border-sidebar-border mt-auto">
+        <SidebarFooter className="p-1 sm:p-2 border-t border-sidebar-border mt-auto">
            <SidebarMenu>
              <SidebarMenuItem>
               <SidebarMenuButton onClick={() => setActiveView('settings')} isActive={activeView === 'settings'} tooltip="Settings">
@@ -1639,16 +1639,16 @@ export default function CourtProceedingsPage() {
         </SidebarFooter>
       </Sidebar>
 
-      <SidebarInset className={`flex flex-col transition-all duration-300 ease-in-out bg-background ${sidebarState === 'collapsed' ? "md:ml-[3rem]" : "md:ml-[16rem]"}`}>
+      <SidebarInset className={`flex flex-col transition-all duration-300 ease-in-out bg-background ${sidebarState === 'collapsed' ? "md:ml-[calc(var(--sidebar-width-icon))]" : "md:ml-[calc(var(--sidebar-width))]"}`}>
         <header className={`flex items-center justify-between mb-0 md:h-14 sticky top-0 z-10 bg-background/80 backdrop-blur-sm border-b ${activeView === 'liveSession' ? 'hidden' : ''}`}>
-            <div className={`p-2 md:p-4 md:hidden ${sidebarOpen ? 'invisible': ''}`}> 
+            <div className={`p-2 md:hidden ${sidebarOpen ? 'invisible': ''}`}> 
                 <Landmark className="h-7 w-7 text-primary" />
             </div>
-            <div className={`ml-auto p-2 md:p-4 md:hidden ${sidebarState === 'collapsed' ? '': 'hidden'}`}> 
+            <div className={`ml-auto p-2 md:hidden ${sidebarState === 'collapsed' ? '': 'hidden'}`}> 
                 <SidebarTrigger />
             </div>
              <div className="hidden md:flex items-center p-4 w-full">
-                 <h2 className="text-xl font-semibold text-primary">
+                 <h2 className="text-lg md:text-xl font-semibold text-primary">
                     {activeView === 'liveSession' && "Live Court Session"}
                     {activeView === 'recordings' && "Saved Sessions"}
                     {activeView === 'transcriptions' && "Manage Active Transcript"}
@@ -1662,7 +1662,7 @@ export default function CourtProceedingsPage() {
              </div>
         </header>
         
-        <main className={`flex-grow overflow-auto ${activeView === 'liveSession' ? 'p-0' : 'p-0 md:p-4'}`}>
+        <main className={`flex-grow overflow-auto ${activeView === 'liveSession' ? 'p-0' : 'p-2 md:p-4'}`}>
           {activeView === 'liveSession' && renderLiveSessionView()}
           {activeView === 'recordings' && renderRecordingsView()}
           {activeView === 'transcriptions' && renderTranscriptionsView()}
@@ -1672,37 +1672,37 @@ export default function CourtProceedingsPage() {
         </main>
 
         <Dialog open={showSaveDialog} onOpenChange={setShowSaveDialog}>
-          <DialogContent>
+          <DialogContent className="sm:max-w-md md:max-w-lg">
             <DialogHeader>
               <DialogTitle>Save Current Session</DialogTitle>
               <DialogDescription>
                 Confirm the details for this court proceeding session. Audio, transcript, case details, and annotations will be saved.
               </DialogDescription>
             </DialogHeader>
-            <div className="grid gap-4 py-4">
-                <div className="grid grid-cols-4 items-center gap-4">
+            <div className="grid gap-3 sm:gap-4 py-4 text-xs sm:text-sm">
+                <div className="grid grid-cols-4 items-center gap-3 sm:gap-4">
                     <Label htmlFor="dialog-session-title" className="text-right">Title</Label>
                     <Input id="dialog-session-title" value={currentSessionTitle} onChange={(e) => setCurrentSessionTitle(e.target.value)} className="col-span-3" />
                 </div>
-                 <div className="grid grid-cols-4 items-center gap-4">
+                 <div className="grid grid-cols-4 items-center gap-3 sm:gap-4">
                     <Label htmlFor="dialog-session-judge" className="text-right">Judge</Label>
                     <Input id="dialog-session-judge" value={caseJudge} onChange={(e) => setCaseJudge(e.target.value)} className="col-span-3" />
                 </div>
-                 <div className="grid grid-cols-4 items-center gap-4">
+                 <div className="grid grid-cols-4 items-center gap-3 sm:gap-4">
                     <Label htmlFor="dialog-session-hearing" className="text-right">Hearing Type</Label>
                     <Input id="dialog-session-hearing" value={caseHearingType} onChange={(e) => setCaseHearingType(e.target.value)} className="col-span-3" />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
+                <div className="grid grid-cols-4 items-center gap-3 sm:gap-4">
                     <Label htmlFor="dialog-session-courtroom" className="text-right">Courtroom</Label>
                     <Input id="dialog-session-courtroom" value={caseCourtroom} onChange={(e) => setCaseCourtroom(e.target.value)} className="col-span-3" />
                 </div>
-                <div className="grid grid-cols-4 items-center gap-4">
+                <div className="grid grid-cols-4 items-center gap-3 sm:gap-4">
                     <Label className="text-right col-span-1 pt-2 self-start">Participants</Label>
                     <div className="col-span-3 space-y-1">
                         {caseParticipants.length > 0 ? caseParticipants.map((p, i) => <Badge key={i} variant="secondary" className="mr-1 mb-1">{p}</Badge>) : <span className="text-xs text-muted-foreground">No participants added.</span>}
                     </div>
                 </div>
-                 <div className="grid grid-cols-4 items-center gap-4">
+                 <div className="grid grid-cols-4 items-center gap-3 sm:gap-4">
                     <Label className="text-right col-span-1 pt-2 self-start">Annotations</Label>
                     <div className="col-span-3 space-y-1">
                         {annotations.length > 0 ? <span className="text-xs text-muted-foreground">{annotations.length} note(s) will be saved.</span> : <span className="text-xs text-muted-foreground">No annotations.</span>}
@@ -1719,30 +1719,30 @@ export default function CourtProceedingsPage() {
         </Dialog>
 
         <Dialog open={showAllAnnotationsDialog} onOpenChange={setShowAllAnnotationsDialog}>
-            <DialogContent className="sm:max-w-2xl">
+            <DialogContent className="max-w-sm sm:max-w-md md:max-w-2xl">
                 <DialogHeader>
-                    <DialogTitle>All Annotations for: {currentSessionTitle}</DialogTitle>
-                    <DialogDescription>
+                    <DialogTitle className="text-base sm:text-lg">All Annotations for: {currentSessionTitle}</DialogTitle>
+                    <DialogDescription className="text-xs sm:text-sm">
                         Review all notes and tags for this session. Sorted by most recent.
                     </DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="max-h-[60vh] p-1 pr-4">
+                <ScrollArea className="max-h-[60vh] p-1 pr-2 sm:pr-4">
                     {annotations.length > 0 ? (
-                        <div className="space-y-3">
+                        <div className="space-y-2 sm:space-y-3">
                             {annotations.sort((a, b) => b.timestamp - a.timestamp).map(ann => (
                                 <Card key={ann.id} className="shadow-sm">
-                                    <CardContent className="p-3">
+                                    <CardContent className="p-2 sm:p-3 text-xs sm:text-sm">
                                         <div className="flex justify-between items-start mb-1">
                                             {ann.tag && <Badge variant="outline" className="text-xs">{ann.tag}</Badge>}
                                             <span className="text-xs text-muted-foreground ml-auto">{formatTime(ann.timestamp)}</span>
                                         </div>
-                                        <p className="text-sm whitespace-pre-wrap">{ann.text}</p>
+                                        <p className="whitespace-pre-wrap">{ann.text}</p>
                                     </CardContent>
                                 </Card>
                             ))}
                         </div>
                     ) : (
-                        <p className="text-sm text-muted-foreground text-center py-8">No annotations for this session.</p>
+                        <p className="text-xs sm:text-sm text-muted-foreground text-center py-8">No annotations for this session.</p>
                     )}
                 </ScrollArea>
                 <DialogFooter>
