@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2, FileText, Trash2, Download, Users, Settings, UserCircle, LayoutDashboard, FolderOpen, Edit, MessageSquare, Video, Palette, Landmark, Briefcase, Sigma, CircleHelp, FileAudio, Clock, Calendar, PlusCircle, ToggleLeft, ToggleRight, Headphones,
-  Play, SkipBack, SkipForward, MicOff, Info, ListOrdered, User, UploadCloud, AudioLines, Volume2, Sun, Moon, Laptop
+  Play, SkipBack, SkipForward, MicOff, Info, ListOrdered, UploadCloud, AudioLines, Volume2, Sun, Moon, Laptop, X
 } from 'lucide-react';
 import { AppLogo } from '@/components/layout/AppLogo';
 import { transcribeAudioAction, searchTranscriptAction, diarizeTranscriptAction } from './actions';
@@ -39,6 +39,10 @@ interface SavedTranscript {
   rawTranscript: string;
   diarizedTranscript: DiarizedSegment[] | null;
   audioDataUri: string | null;
+  judge?: string;
+  hearingType?: string;
+  courtroom?: string;
+  participants?: string[];
 }
 
 const speakerColors: { [key: string]: string } = {
@@ -98,6 +102,14 @@ export default function CourtProceedingsPage() {
   const [autoTranscription, setAutoTranscription] = useState<boolean>(true);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
+  // Case Details State
+  const [caseJudge, setCaseJudge] = useState<string>('');
+  const [caseHearingType, setCaseHearingType] = useState<string>('');
+  const [caseCourtroom, setCaseCourtroom] = useState<string>('');
+  const [caseParticipants, setCaseParticipants] = useState<string[]>([]);
+  const [newParticipantName, setNewParticipantName] = useState<string>('');
+
+
   // Settings state
   const [audioInputDevices, setAudioInputDevices] = useState<MediaDeviceInfo[]>([]);
   const [audioOutputDevices, setAudioOutputDevices] = useState<MediaDeviceInfo[]>([]);
@@ -146,29 +158,31 @@ export default function CourtProceedingsPage() {
   useEffect(() => {
     const getAudioDevices = async () => {
       try {
-        await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); // Request permission first
+        // Ensure permissions are requested before enumerating devices
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         const devices = await navigator.mediaDevices.enumerateDevices();
         const inputs = devices.filter(device => device.kind === 'audioinput');
         const outputs = devices.filter(device => device.kind === 'audiooutput');
         setAudioInputDevices(inputs);
         setAudioOutputDevices(outputs);
         if (inputs.length > 0 && !selectedInputDevice) setSelectedInputDevice(inputs[0].deviceId);
-        // Output device selection is typically handled by OS/browser, so we don't auto-select
         if (outputs.length > 0 && !selectedOutputDevice) setSelectedOutputDevice(outputs[0].deviceId); 
       } catch (err) {
         console.error("Error enumerating audio devices or getting permissions:", err);
-        toast({
-            title: "Audio Device Error",
-            description: "Could not access audio devices. Please ensure microphone permissions are granted.",
-            variant: "destructive",
-        });
+        if (activeView === 'settings') { // Only toast if user is actively trying to configure
+          toast({
+              title: "Audio Device Error",
+              description: "Could not access audio devices. Ensure microphone permissions are granted and try reloading.",
+              variant: "destructive",
+          });
+        }
       }
     };
 
-    if (activeView === 'settings') {
+    if (activeView === 'settings' || recordingState === 'idle') { // Get devices if on settings page or if idle (preparing for recording)
       getAudioDevices();
     }
-  }, [activeView, toast]);
+  }, [activeView, toast, selectedInputDevice, selectedOutputDevice, recordingState]);
 
 
   useEffect(() => {
@@ -232,18 +246,17 @@ export default function CourtProceedingsPage() {
       return;
     }
     if (!audioForDiarization || !currentTranscript.trim()) {
-      // Only toast if it was an explicit attempt (e.g., button click or loading a transcript that should diarize)
       const isExplicitAttempt = !!(audioUriToDiarize || transcriptToDiarize) || 
                                 (activeView === 'transcriptions' && !!(currentRecordingFullAudioUri || loadedAudioUri));
       if (isExplicitAttempt) {
           toast({ title: 'Diarization Skipped', description: 'Full audio and raw transcript are required.', variant: 'default' });
       }
-      setDiarizedTranscript(null); // Ensure diarized transcript is cleared if conditions not met
+      setDiarizedTranscript(null);
       return;
     }
 
     setIsDiarizing(true);
-    setDiarizedTranscript(null); // Clear previous diarization results before starting a new one
+    setDiarizedTranscript(null); 
     try {
       const input: DiarizeTranscriptInput = { 
         audioDataUri: audioForDiarization, 
@@ -256,9 +269,6 @@ export default function CourtProceedingsPage() {
         toast({ title: 'Diarization Complete', description: 'Transcript has been segmented by speaker.', icon: <CheckCircle2 className="h-5 w-5 text-green-500" /> });
       } else if (response.error) {
         toast({ title: 'Diarization Failed', description: response.error, variant: 'destructive' });
-        // Keep the raw transcript visible by not setting diarizedTranscript to an error state,
-        // or set it to a specific format indicating failure but retaining raw data view.
-        // For now, simply not setting it will keep raw transcript if it was already being shown.
         setDiarizedTranscript([{speaker: "Error", text: "Diarization failed. Raw transcript retained."}]);
       }
     } catch (error) {
@@ -317,8 +327,11 @@ export default function CourtProceedingsPage() {
             setCurrentRecordingFullAudioUri(null);
             setLoadedAudioUri(null); 
             audioChunksRef.current = [];
-            const now = new Date();
-            setCurrentSessionTitle(`Court Session - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+            // Only set default title if it's truly untitled, preserve user edits if any
+            if (currentSessionTitle === 'Untitled Session' || currentSessionTitle.startsWith('Court Session -')) {
+                const now = new Date();
+                setCurrentSessionTitle(`Court Session - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
+            }
           }
           toast({ title: 'Recording Started', description: 'Audio capture is active.', icon: <Mic className="h-5 w-5 text-green-500" /> });
         };
@@ -388,15 +401,19 @@ export default function CourtProceedingsPage() {
   const handleStopRecording = () => {
     if (mediaRecorderRef.current && (mediaRecorderRef.current.state === 'recording' || mediaRecorderRef.current.state === 'paused')) {
       mediaRecorderRef.current.stop(); 
-    } else if (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri || rawTranscript)) {
+    } else if (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri || rawTranscript || currentSessionTitle !== 'Untitled Session' || caseJudge || caseHearingType || caseCourtroom || caseParticipants.length > 0)) {
       setRawTranscript('');
       setDiarizedTranscript(null);
       setCurrentRecordingFullAudioUri(null);
       setLoadedAudioUri(null);
       setCurrentSessionTitle('Untitled Session');
+      setCaseJudge('');
+      setCaseHearingType('');
+      setCaseCourtroom('');
+      setCaseParticipants([]);
       setElapsedTime(0);
       audioChunksRef.current = [];
-      toast({title: "Session Data Cleared", description: "Current audio and transcript data has been cleared."});
+      toast({title: "Session Data Cleared", description: "Current audio, transcript, and case details have been cleared."});
     }
   };
   
@@ -410,10 +427,9 @@ export default function CourtProceedingsPage() {
     }
   };
 
-
   const handleInitiateSave = () => {
-    if (!rawTranscript.trim() && !diarizedTranscript) {
-      toast({ title: "Cannot Save", description: "Transcript is empty.", variant: "destructive" });
+    if (!rawTranscript.trim() && !diarizedTranscript && !currentRecordingFullAudioUri && !loadedAudioUri) {
+      toast({ title: "Cannot Save", description: "No data to save (transcript or audio).", variant: "destructive" });
       return;
     }
     if (!currentSessionTitle.trim() || currentSessionTitle === "Untitled Session") { 
@@ -437,6 +453,10 @@ export default function CourtProceedingsPage() {
       rawTranscript: rawTranscript,
       diarizedTranscript: diarizedTranscript,
       audioDataUri: currentRecordingFullAudioUri || loadedAudioUri, 
+      judge: caseJudge,
+      hearingType: caseHearingType,
+      courtroom: caseCourtroom,
+      participants: caseParticipants,
     };
     persistSavedTranscripts([newSavedTranscript, ...savedTranscripts]);
     
@@ -462,10 +482,14 @@ export default function CourtProceedingsPage() {
     setLoadedAudioUri(audioToLoad);
     setCurrentRecordingFullAudioUri(null); // Clear any live recording audio
     setCurrentSessionTitle(selectedTranscript.title || "Untitled Session"); 
-    setElapsedTime(0); // Reset timer for loaded session (audio player will have its own duration)
+    setCaseJudge(selectedTranscript.judge || '');
+    setCaseHearingType(selectedTranscript.hearingType || '');
+    setCaseCourtroom(selectedTranscript.courtroom || '');
+    setCaseParticipants(selectedTranscript.participants || []);
+    setElapsedTime(0); 
     
     toast({ title: 'Transcript Loaded', description: `"${selectedTranscript.title || "Untitled Session"}" is now active.` });
-    setActiveView("transcriptions"); // Switch to transcriptions view to see the loaded content
+    setActiveView("liveSession"); 
 
     if (audioToLoad && selectedTranscript.rawTranscript.trim() && !selectedTranscript.diarizedTranscript) {
       setTimeout(() => handleDiarizeTranscript(audioToLoad, selectedTranscript.rawTranscript), 0);
@@ -533,7 +557,7 @@ export default function CourtProceedingsPage() {
   }, [rawTranscript, diarizedTranscript, activeView]);
   
   const canManuallyDiarize = recordingState === 'idle' && !!rawTranscript.trim() && !!(currentRecordingFullAudioUri || loadedAudioUri) && !isDiarizing;
-  const canSave = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript);
+  const canSave = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript || !!currentRecordingFullAudioUri || !!loadedAudioUri || (currentSessionTitle !== 'Untitled Session' && currentSessionTitle.trim() !== ''));
   const canDownload = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript);
 
   const handleSaveCustomTerms = () => {
@@ -558,6 +582,18 @@ export default function CourtProceedingsPage() {
     setShowClearStorageDialog(false);
   };
 
+  const handleAddParticipant = () => {
+    if (newParticipantName.trim() && !caseParticipants.includes(newParticipantName.trim())) {
+      setCaseParticipants([...caseParticipants, newParticipantName.trim()]);
+      setNewParticipantName('');
+    } else if (caseParticipants.includes(newParticipantName.trim())) {
+      toast({ title: "Participant Exists", description: "This participant is already in the list.", variant: "default"});
+    }
+  };
+
+  const handleRemoveParticipant = (participantToRemove: string) => {
+    setCaseParticipants(caseParticipants.filter(p => p !== participantToRemove));
+  };
 
   const renderLiveSessionHeader = () => (
     <header className="bg-primary text-primary-foreground p-3 md:p-4 shadow-md">
@@ -587,39 +623,87 @@ export default function CourtProceedingsPage() {
             </CardHeader>
             <CardContent className="space-y-3 text-sm flex-grow overflow-y-auto px-4 pb-4">
               <div>
-                <Label className="text-xs text-muted-foreground">Case Number</Label>
-                <p className="font-medium">{currentSessionTitle.startsWith("Court Session -") ? "N/A (New Session)" : currentSessionTitle}</p>
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">Case Title</Label>
+                <Label htmlFor="case-title" className="text-xs text-muted-foreground">Case Title / Number</Label>
                 <Input 
+                  id="case-title"
                   type="text" 
                   value={currentSessionTitle} 
                   onChange={(e) => setCurrentSessionTitle(e.target.value)} 
-                  placeholder="Enter case title..."
+                  placeholder="Enter case title or number..."
                   className="text-sm h-8 mt-1 bg-card"
                   disabled={recordingState !== 'idle'}
                 />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Judge</Label>
-                <p className="font-medium">Hon. Justice Smith (Placeholder)</p>
+                <Label htmlFor="case-judge" className="text-xs text-muted-foreground">Judge</Label>
+                <Input 
+                  id="case-judge"
+                  type="text" 
+                  value={caseJudge} 
+                  onChange={(e) => setCaseJudge(e.target.value)} 
+                  placeholder="Enter judge's name..."
+                  className="text-sm h-8 mt-1 bg-card"
+                  disabled={recordingState !== 'idle'}
+                />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Hearing Type</Label>
-                <p className="font-medium">Arraignment (Placeholder)</p>
+                <Label htmlFor="case-hearing-type" className="text-xs text-muted-foreground">Hearing Type</Label>
+                <Input 
+                  id="case-hearing-type"
+                  type="text" 
+                  value={caseHearingType} 
+                  onChange={(e) => setCaseHearingType(e.target.value)} 
+                  placeholder="e.g., Motion, Arraignment"
+                  className="text-sm h-8 mt-1 bg-card"
+                  disabled={recordingState !== 'idle'}
+                />
               </div>
               <div>
-                <Label className="text-xs text-muted-foreground">Courtroom</Label>
-                <p className="font-medium">Court 2 (Placeholder)</p>
+                <Label htmlFor="case-courtroom" className="text-xs text-muted-foreground">Courtroom</Label>
+                <Input 
+                  id="case-courtroom"
+                  type="text" 
+                  value={caseCourtroom} 
+                  onChange={(e) => setCaseCourtroom(e.target.value)} 
+                  placeholder="Enter courtroom number/name"
+                  className="text-sm h-8 mt-1 bg-card"
+                  disabled={recordingState !== 'idle'}
+                />
               </div>
               <Separator className="my-3" />
-              <h3 className="font-semibold text-sm mb-2">Participants (Placeholder)</h3>
-              <ul className="space-y-1 text-xs">
-                <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Justice Smith (Judge)</li>
-                <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Barr. Adekunle (Prosecution)</li>
-                <li className="flex items-center"><User className="mr-2 text-primary" size={14} /> Barr. Eze (Defense)</li>
-              </ul>
+              <h3 className="font-semibold text-sm mb-1">Participants</h3>
+              <div className="space-y-2">
+                {caseParticipants.map((participant, index) => (
+                  <div key={index} className="flex items-center justify-between bg-card p-1.5 rounded border border-border text-xs">
+                    <span className="flex items-center"><User className="mr-1.5 text-primary" size={12} /> {participant}</span>
+                    <Button 
+                      variant="ghost" 
+                      size="icon" 
+                      className="h-5 w-5 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleRemoveParticipant(participant)}
+                      disabled={recordingState !== 'idle'}
+                      aria-label={`Remove ${participant}`}
+                    >
+                      <X size={12} />
+                    </Button>
+                  </div>
+                ))}
+                 {caseParticipants.length === 0 && <p className="text-xs text-muted-foreground">No participants added.</p>}
+              </div>
+              <div className="flex items-center gap-2 mt-2">
+                <Input 
+                  type="text" 
+                  value={newParticipantName} 
+                  onChange={(e) => setNewParticipantName(e.target.value)} 
+                  placeholder="Add participant name..."
+                  className="text-xs h-7 flex-grow bg-card"
+                  disabled={recordingState !== 'idle'}
+                  onKeyPress={(e) => e.key === 'Enter' && handleAddParticipant()}
+                />
+                <Button onClick={handleAddParticipant} size="sm" className="text-xs h-7 px-2" disabled={recordingState !== 'idle' || !newParticipantName.trim()}>
+                  <PlusCircle size={12} className="mr-1"/> Add
+                </Button>
+              </div>
             </CardContent>
             <CardFooter className="flex-col space-y-2 p-4 border-t bg-muted/50">
                <Button onClick={handleInitiateSave} disabled={!canSave || isSaving} className="w-full">
@@ -711,7 +795,7 @@ export default function CourtProceedingsPage() {
                         <Square size={28}/>
                      </Button>
                   )}
-                   {(recordingState === 'idle' && (rawTranscript || diarizedTranscript || currentRecordingFullAudioUri || loadedAudioUri)) && ( 
+                   {(recordingState === 'idle' && (rawTranscript || diarizedTranscript || currentRecordingFullAudioUri || loadedAudioUri || currentSessionTitle !== 'Untitled Session' || caseJudge || caseHearingType || caseCourtroom || caseParticipants.length > 0)) && ( 
                         <Button onClick={handleStopRecording} variant="outline" size="lg" className="p-3 rounded-full w-16 h-16" aria-label="Clear Current Session Data">
                             <Trash2 size={28}/>
                         </Button>
@@ -784,7 +868,7 @@ export default function CourtProceedingsPage() {
                          <span className="text-muted-foreground">Waiting for recording or transcription...</span>
                     )}
                     {isDiarizing && <div className="flex items-center text-muted-foreground"><Loader2 className="inline h-4 w-4 animate-spin mr-1" /> Identifying speakers...</div>}
-                    {recordingState === 'recording' && autoTranscription && !isTranscribingChunk && ( // Removed isTranscribingChunk duplicate check
+                    {recordingState === 'recording' && autoTranscription && !isTranscribingChunk && ( 
                       <div className="flex items-center animate-pulse text-muted-foreground">
                         <div className="h-2 w-2 rounded-full bg-primary mr-1 animate-ping delay-75"></div>
                         <div className="h-2 w-2 rounded-full bg-primary mr-1 animate-ping delay-150"></div>
@@ -1078,7 +1162,7 @@ export default function CourtProceedingsPage() {
           <div className="space-y-4">
             <div>
               <Label htmlFor="audio-input-select" className="text-sm font-medium">Audio Input Device</Label>
-              <Select value={selectedInputDevice} onValueChange={setSelectedInputDevice}>
+              <Select value={selectedInputDevice} onValueChange={setSelectedInputDevice} disabled={recordingState !== 'idle'}>
                 <SelectTrigger id="audio-input-select" className="mt-1">
                   <SelectValue placeholder="Select input device..." />
                 </SelectTrigger>
@@ -1113,6 +1197,7 @@ export default function CourtProceedingsPage() {
                 id="noise-cancellation-switch" 
                 checked={noiseCancellationEnabled} 
                 onCheckedChange={setNoiseCancellationEnabled}
+                disabled // Placeholder
               />
             </div>
              <p className="text-xs text-muted-foreground">Actual noise cancellation is a future enhancement.</p>
@@ -1297,15 +1382,33 @@ export default function CourtProceedingsPage() {
             <DialogHeader>
               <DialogTitle>Save Current Session</DialogTitle>
               <DialogDescription>
-                Enter or confirm the title for this court proceeding session. The audio and transcript (raw and diarized, if available) will be saved.
+                Confirm the details for this court proceeding session. The audio (if recorded/loaded), transcript (raw and diarized, if available), and case details will be saved.
               </DialogDescription>
             </DialogHeader>
-            <Input 
-              placeholder="Session Title (e.g., Case XYZ - Day 1)"
-              value={currentSessionTitle}
-              onChange={(e) => setCurrentSessionTitle(e.target.value)}
-              className="my-4"
-            />
+            <div className="grid gap-4 py-4">
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="dialog-session-title" className="text-right">Title</Label>
+                    <Input id="dialog-session-title" value={currentSessionTitle} onChange={(e) => setCurrentSessionTitle(e.target.value)} className="col-span-3" />
+                </div>
+                 <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="dialog-session-judge" className="text-right">Judge</Label>
+                    <Input id="dialog-session-judge" value={caseJudge} onChange={(e) => setCaseJudge(e.target.value)} className="col-span-3" />
+                </div>
+                 <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="dialog-session-hearing" className="text-right">Hearing Type</Label>
+                    <Input id="dialog-session-hearing" value={caseHearingType} onChange={(e) => setCaseHearingType(e.target.value)} className="col-span-3" />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label htmlFor="dialog-session-courtroom" className="text-right">Courtroom</Label>
+                    <Input id="dialog-session-courtroom" value={caseCourtroom} onChange={(e) => setCaseCourtroom(e.target.value)} className="col-span-3" />
+                </div>
+                <div className="grid grid-cols-4 items-center gap-4">
+                    <Label className="text-right col-span-1 pt-2 self-start">Participants</Label>
+                    <div className="col-span-3 space-y-1">
+                        {caseParticipants.length > 0 ? caseParticipants.map((p, i) => <span key={i} className="inline-block bg-muted text-muted-foreground text-xs px-2 py-1 rounded mr-1 mb-1">{p}</span>) : <span className="text-xs text-muted-foreground">No participants added.</span>}
+                    </div>
+                </div>
+            </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setShowSaveDialog(false)}>Cancel</Button>
               <Button onClick={handleConfirmSave} disabled={isSaving || !currentSessionTitle.trim()}>
