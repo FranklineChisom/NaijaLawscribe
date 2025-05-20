@@ -100,7 +100,7 @@ export default function CourtProceedingsPage() {
   const [activeView, setActiveView] = useState<ActiveView>('liveSession');
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [autoTranscription, setAutoTranscription] = useState<boolean>(true);
-  const [currentDateTime, setCurrentDateTime] = useState(new Date());
+  const [currentDateTime, setCurrentDateTime] = useState<Date | null>(null);
 
   // Case Details State
   const [caseJudge, setCaseJudge] = useState<string>('');
@@ -146,6 +146,8 @@ export default function CourtProceedingsPage() {
       setCustomLegalTerms(storedCustomTerms);
     }
 
+    // Set initial date/time on client mount and start interval
+    setCurrentDateTime(new Date());
     dateTimeIntervalRef.current = setInterval(() => {
       setCurrentDateTime(new Date());
     }, 1000);
@@ -158,7 +160,6 @@ export default function CourtProceedingsPage() {
   useEffect(() => {
     const getAudioDevices = async () => {
       try {
-        // Ensure permissions are requested before enumerating devices
         await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         const devices = await navigator.mediaDevices.enumerateDevices();
         const inputs = devices.filter(device => device.kind === 'audioinput');
@@ -169,7 +170,7 @@ export default function CourtProceedingsPage() {
         if (outputs.length > 0 && !selectedOutputDevice) setSelectedOutputDevice(outputs[0].deviceId); 
       } catch (err) {
         console.error("Error enumerating audio devices or getting permissions:", err);
-        if (activeView === 'settings') { // Only toast if user is actively trying to configure
+        if (activeView === 'settings') { 
           toast({
               title: "Audio Device Error",
               description: "Could not access audio devices. Ensure microphone permissions are granted and try reloading.",
@@ -179,7 +180,7 @@ export default function CourtProceedingsPage() {
       }
     };
 
-    if (activeView === 'settings' || recordingState === 'idle') { // Get devices if on settings page or if idle (preparing for recording)
+    if (activeView === 'settings' || recordingState === 'idle') { 
       getAudioDevices();
     }
   }, [activeView, toast, selectedInputDevice, selectedOutputDevice, recordingState]);
@@ -327,7 +328,6 @@ export default function CourtProceedingsPage() {
             setCurrentRecordingFullAudioUri(null);
             setLoadedAudioUri(null); 
             audioChunksRef.current = [];
-            // Only set default title if it's truly untitled, preserve user edits if any
             if (currentSessionTitle === 'Untitled Session' || currentSessionTitle.startsWith('Court Session -')) {
                 const now = new Date();
                 setCurrentSessionTitle(`Court Session - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
@@ -480,7 +480,7 @@ export default function CourtProceedingsPage() {
     setDiarizedTranscript(selectedTranscript.diarizedTranscript || null);
     const audioToLoad = selectedTranscript.audioDataUri || null;
     setLoadedAudioUri(audioToLoad);
-    setCurrentRecordingFullAudioUri(null); // Clear any live recording audio
+    setCurrentRecordingFullAudioUri(null); 
     setCurrentSessionTitle(selectedTranscript.title || "Untitled Session"); 
     setCaseJudge(selectedTranscript.judge || '');
     setCaseHearingType(selectedTranscript.hearingType || '');
@@ -600,8 +600,17 @@ export default function CourtProceedingsPage() {
       <div className="flex flex-wrap justify-between items-center gap-2 md:gap-4">
         <h1 className="text-xl md:text-2xl font-semibold">Court Recording & Transcription</h1>
         <div className="flex items-center space-x-2 md:space-x-4 text-xs md:text-sm">
-          <span className="flex items-center"><Calendar className="mr-1 md:mr-2" size={16} /> {currentDateTime.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
-          <span className="flex items-center"><Clock className="mr-1 md:mr-2" size={16} /> {currentDateTime.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+          {currentDateTime ? (
+            <>
+              <span className="flex items-center"><Calendar className="mr-1 md:mr-2" size={16} /> {currentDateTime.toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' })}</span>
+              <span className="flex items-center"><Clock className="mr-1 md:mr-2" size={16} /> {currentDateTime.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+            </>
+          ) : (
+            <>
+              <span className="flex items-center"><Calendar className="mr-1 md:mr-2" size={16} /> Loading date...</span>
+              <span className="flex items-center"><Clock className="mr-1 md:mr-2" size={16} /> Loading time...</span>
+            </>
+          )}
           {(recordingState === 'recording' || recordingState === 'paused') && (
             <span className="bg-green-500/80 text-white px-2 py-1 rounded-full text-xs font-medium animate-pulse">ACTIVE SESSION</span>
           )}
@@ -675,7 +684,7 @@ export default function CourtProceedingsPage() {
               <div className="space-y-2">
                 {caseParticipants.map((participant, index) => (
                   <div key={index} className="flex items-center justify-between bg-card p-1.5 rounded border border-border text-xs">
-                    <span className="flex items-center"><User className="mr-1.5 text-primary" size={12} /> {participant}</span>
+                    <span className="flex items-center"><UserCircle className="mr-1.5 text-primary" size={12} /> {participant}</span>
                     <Button 
                       variant="ghost" 
                       size="icon" 
@@ -1225,6 +1234,9 @@ export default function CourtProceedingsPage() {
             <Button variant="outline" disabled className="w-full justify-start text-left">
               <Sigma className="mr-2 h-4 w-4" /> Select Language Model (Default - Placeholder)
             </Button>
+             <Button variant="outline" disabled className="w-full justify-start text-left">
+              <PlusCircle className="mr-2 h-4 w-4" /> Upload Custom Dictionary (Placeholder)
+            </Button>
           </div>
         </div>
         
@@ -1248,7 +1260,7 @@ export default function CourtProceedingsPage() {
         </div>
 
         <div className="p-4 border rounded-md bg-card shadow-sm">
-          <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><UploadCloud className="mr-2 h-5 w-5"/>Data Storage (Local)</h3>
+          <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><UploadCloud className="mr-2 h-5 w-5"/>Data Storage</h3>
            <p className="text-sm text-muted-foreground mb-2">Saved sessions are currently stored in your browser's local storage.</p>
             <AlertDialog open={showClearStorageDialog} onOpenChange={setShowClearStorageDialog}>
                 <AlertDialogTrigger asChild>
@@ -1269,6 +1281,12 @@ export default function CourtProceedingsPage() {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+            <Button variant="outline" disabled className="mt-2 w-full justify-start text-left">
+              <Briefcase className="mr-2 h-4 w-4"/> Configure Cloud Storage (Placeholder)
+            </Button>
+            <Button variant="outline" disabled className="mt-2 w-full justify-start text-left">
+               <Clock className="mr-2 h-4 w-4"/> Backup & Archiving Settings (Placeholder)
+            </Button>
           <p className="text-xs text-muted-foreground mt-2">Cloud storage options are a future enhancement.</p>
         </div>
       </CardContent>
@@ -1419,7 +1437,7 @@ export default function CourtProceedingsPage() {
         </Dialog>
          {activeView !== 'liveSession' && ( 
             <footer className="w-full mt-auto p-3 text-center text-xs text-muted-foreground border-t bg-muted/30">
-                <p>&copy; {new Date().getFullYear()} VeriCourt. All rights reserved.</p>
+                <p>&copy; {currentDateTime ? currentDateTime.getFullYear() : new Date().getFullYear()} VeriCourt. All rights reserved.</p>
                 <p className="mt-1">AI-Powered Legal Transcription for Nigerian Professionals.</p>
             </footer>
          )}
