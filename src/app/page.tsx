@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2, FileText, Trash2, Download, Users, Settings, UserCircle, LayoutDashboard, FolderOpen, Edit, MessageSquare, Video, Palette, Landmark, Briefcase, Sigma, CircleHelp, FileAudio, Clock, PlusCircle, ToggleLeft, ToggleRight, Headphones,
-  Play, SkipBack, SkipForward, MicOff, Calendar, Info, ListOrdered, User // Added User here
+  Play, SkipBack, SkipForward, MicOff, Calendar, Info, ListOrdered, User, UploadCloud, AudioLines, Volume2
 } from 'lucide-react';
 import { AppLogo } from '@/components/layout/AppLogo';
 import { transcribeAudioAction, searchTranscriptAction, diarizeTranscriptAction } from './actions';
@@ -22,6 +22,8 @@ import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, S
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea'; 
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+
 
 type RecordingState = 'idle' | 'recording' | 'paused';
 type ActiveView = 'liveSession' | 'recordings' | 'transcriptions' | 'searchCases' | 'settings' | 'userProfile';
@@ -91,6 +93,13 @@ export default function CourtProceedingsPage() {
   const [autoTranscription, setAutoTranscription] = useState<boolean>(true);
   const [currentDateTime, setCurrentDateTime] = useState(new Date());
 
+  // Settings state
+  const [audioInputDevices, setAudioInputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [audioOutputDevices, setAudioOutputDevices] = useState<MediaDeviceInfo[]>([]);
+  const [selectedInputDevice, setSelectedInputDevice] = useState<string>('');
+  const [selectedOutputDevice, setSelectedOutputDevice] = useState<string>('');
+  const [noiseCancellationEnabled, setNoiseCancellationEnabled] = useState<boolean>(false);
+
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -112,10 +121,30 @@ export default function CourtProceedingsPage() {
       setCurrentDateTime(new Date());
     }, 1000);
 
+    // Fetch audio devices for settings
+    const getAudioDevices = async () => {
+      try {
+        // Request permission first, as enumerateDevices might not return labels without it
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        const devices = await navigator.mediaDevices.enumerateDevices();
+        const inputs = devices.filter(device => device.kind === 'audioinput');
+        const outputs = devices.filter(device => device.kind === 'audiooutput');
+        setAudioInputDevices(inputs);
+        setAudioOutputDevices(outputs);
+        if (inputs.length > 0 && !selectedInputDevice) setSelectedInputDevice(inputs[0].deviceId);
+        if (outputs.length > 0 && !selectedOutputDevice) setSelectedOutputDevice(outputs[0].deviceId);
+      } catch (err) {
+        console.error("Error enumerating audio devices or getting permissions:", err);
+        // toast({ title: "Audio Device Error", description: "Could not list audio devices. Microphone permission might be needed.", variant: "destructive"});
+      }
+    };
+    getAudioDevices();
+
+
     return () => {
       if (dateTimeIntervalRef.current) clearInterval(dateTimeIntervalRef.current);
     };
-  }, []);
+  }, []); // Removed selectedInputDevice and selectedOutputDevice from deps to avoid loop
 
   useEffect(() => {
     if (recordingState === 'recording') {
@@ -174,7 +203,6 @@ export default function CourtProceedingsPage() {
     }
     if (!audioForDiarization || !currentTranscript.trim()) {
       if (audioUriToDiarize || transcriptToDiarize || (activeView === 'transcriptions' && (currentRecordingFullAudioUri || loadedAudioUri))) {
-         // Only show toast if manually triggered or clearly expected (e.g. in transcriptions tab with audio)
           toast({ title: 'Diarization Skipped', description: 'Full audio and raw transcript are required.', variant: 'default' });
       }
       setDiarizedTranscript(null);
@@ -206,7 +234,9 @@ export default function CourtProceedingsPage() {
   const handleStartRecording = async () => {
     if (recordingState === 'idle' || recordingState === 'paused') { 
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+            audio: selectedInputDevice ? { deviceId: { exact: selectedInputDevice } } : true 
+        });
         mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' }); 
 
         mediaRecorderRef.current.ondataavailable = async (event) => {
@@ -273,7 +303,7 @@ export default function CourtProceedingsPage() {
             try {
               const audioDataUri = await blobToDataURI(fullAudioBlob);
               setCurrentRecordingFullAudioUri(audioDataUri);
-              if (rawTranscript.trim() && audioDataUri) { 
+              if (rawTranscript.trim() && audioDataUri && !diarizedTranscript) { 
                 setTimeout(() => handleDiarizeTranscript(audioDataUri, rawTranscript), 0); 
               }
             } catch (error) {
@@ -292,7 +322,7 @@ export default function CourtProceedingsPage() {
 
       } catch (error) {
         console.error('Error accessing microphone:', error);
-        toast({ title: 'Microphone Error', description: 'Could not access microphone. Please check permissions.', variant: 'destructive' });
+        toast({ title: 'Microphone Error', description: 'Could not access microphone. Please check permissions and selected device.', variant: 'destructive' });
       }
     }
   };
@@ -305,21 +335,26 @@ export default function CourtProceedingsPage() {
   
   const handleResumeRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
-      mediaRecorderRef.current.resume();
+      mediaRecorderRef.current.resume(); // This should trigger onresume
+    } else {
+      // If trying to resume when idle, effectively start a new recording
+      handleStartRecording();
     }
   };
 
   const handleStopRecording = () => {
     if (mediaRecorderRef.current && (mediaRecorderRef.current.state === 'recording' || mediaRecorderRef.current.state === 'paused')) {
-      mediaRecorderRef.current.stop();
-    } else if (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri)) {
-      toast({title: "Session Data Cleared", description: "Current audio and transcript data has been cleared."});
+      mediaRecorderRef.current.stop(); // This will trigger onstop
+    } else if (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri || rawTranscript)) {
+      // Clear out session data if stop is pressed in idle state with existing data
       setRawTranscript('');
       setDiarizedTranscript(null);
       setCurrentRecordingFullAudioUri(null);
       setLoadedAudioUri(null);
       setCurrentSessionTitle('Untitled Session');
       setElapsedTime(0);
+      audioChunksRef.current = [];
+      toast({title: "Session Data Cleared", description: "Current audio and transcript data has been cleared."});
     }
   };
   
@@ -328,7 +363,7 @@ export default function CourtProceedingsPage() {
       handlePauseRecording();
     } else if (recordingState === 'paused') {
       handleResumeRecording();
-    } else { 
+    } else { // 'idle'
       handleStartRecording();
     }
   };
@@ -615,7 +650,7 @@ export default function CourtProceedingsPage() {
                       </div>
                   </div>
                   <div className="flex space-x-2 mt-2 sm:mt-0">
-                    <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground"><Headphones size={18}/></Button></TooltipTrigger><TooltipContent><p>Audio Input/Output Settings (Disabled)</p></TooltipContent></Tooltip>
+                    <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" onClick={() => setActiveView('settings')}><Headphones size={18}/></Button></TooltipTrigger><TooltipContent><p>Audio Input/Output Settings</p></TooltipContent></Tooltip>
                     <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground"><Info size={18} /></Button></TooltipTrigger><TooltipContent><p>Session Info (Disabled)</p></TooltipContent></Tooltip>
                   </div>
                 </div>
@@ -966,32 +1001,75 @@ export default function CourtProceedingsPage() {
     </Card>
   );
 
-  const renderSettingsView = () => (
+ const renderSettingsView = () => (
     <Card className="shadow-lg h-full">
       <CardHeader>
         <CardTitle className="text-xl flex items-center"><Settings className="mr-2 h-6 w-6 text-primary" />Application Settings</CardTitle>
-        <CardDescription>Configure application preferences (Most are placeholders).</CardDescription>
+        <CardDescription>Configure application preferences.</CardDescription>
       </CardHeader>
       <CardContent className="space-y-6 p-4">
-        <div className="p-4 border rounded-md bg-card">
-          <h3 className="text-lg font-semibold mb-2 text-primary">Audio Configuration</h3>
-          <p className="text-sm text-muted-foreground">Input/output device selection, noise cancellation options, etc. (Placeholder)</p>
+        <div className="p-4 border rounded-md bg-card shadow-sm">
+          <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><Headphones className="mr-2 h-5 w-5" />Audio Configuration</h3>
+          <div className="space-y-4">
+            <div>
+              <Label htmlFor="audio-input-select" className="text-sm font-medium">Audio Input Device</Label>
+              <Select value={selectedInputDevice} onValueChange={setSelectedInputDevice}>
+                <SelectTrigger id="audio-input-select" className="mt-1">
+                  <SelectValue placeholder="Select input device..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {audioInputDevices.length > 0 ? audioInputDevices.map(device => (
+                    <SelectItem key={device.deviceId} value={device.deviceId}>
+                      {device.label || `Input Device ${device.deviceId.substring(0,8)}`}
+                    </SelectItem>
+                  )) : <SelectItem value="no-input" disabled>No input devices found</SelectItem>}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label htmlFor="audio-output-select" className="text-sm font-medium">Audio Output Device</Label>
+              <Select value={selectedOutputDevice} onValueChange={setSelectedOutputDevice}>
+                <SelectTrigger id="audio-output-select" className="mt-1">
+                  <SelectValue placeholder="Select output device..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {audioOutputDevices.length > 0 ? audioOutputDevices.map(device => (
+                    <SelectItem key={device.deviceId} value={device.deviceId}>
+                      {device.label || `Output Device ${device.deviceId.substring(0,8)}`}
+                    </SelectItem>
+                  )) : <SelectItem value="no-output" disabled>No output devices found</SelectItem>}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground mt-1">Note: Output device selection is informational. Actual output device is controlled by your OS/browser.</p>
+            </div>
+            <div className="flex items-center justify-between pt-2">
+              <Label htmlFor="noise-cancellation-switch" className="text-sm font-medium">Enable Noise Cancellation</Label>
+              <Switch 
+                id="noise-cancellation-switch" 
+                checked={noiseCancellationEnabled} 
+                onCheckedChange={setNoiseCancellationEnabled}
+              />
+            </div>
+             <p className="text-xs text-muted-foreground">Actual noise cancellation implementation is a future enhancement.</p>
+          </div>
         </div>
-        <div className="p-4 border rounded-md bg-card">
-          <h3 className="text-lg font-semibold mb-2 text-primary">Transcription Models</h3>
+
+        <div className="p-4 border rounded-md bg-card shadow-sm">
+          <h3 className="text-lg font-semibold mb-2 text-primary flex items-center"><FileText className="mr-2 h-5 w-5" />Transcription Models</h3>
           <p className="text-sm text-muted-foreground">Select custom language models or dictionaries for legal terms. (Placeholder)</p>
         </div>
-        <div className="p-4 border rounded-md bg-card">
-          <h3 className="text-lg font-semibold mb-2 text-primary">Data Storage</h3>
+        <div className="p-4 border rounded-md bg-card shadow-sm">
+          <h3 className="text-lg font-semibold mb-2 text-primary flex items-center"><UploadCloud className="mr-2 h-5 w-5"/>Data Storage</h3>
           <p className="text-sm text-muted-foreground">Manage cloud or local storage options, backup, and archiving. (Placeholder)</p>
         </div>
-         <div className="p-4 border rounded-md bg-card">
-          <h3 className="text-lg font-semibold mb-2 text-primary">Theme</h3>
+         <div className="p-4 border rounded-md bg-card shadow-sm">
+          <h3 className="text-lg font-semibold mb-2 text-primary flex items-center"><Palette className="mr-2 h-5 w-5" />Theme</h3>
           <p className="text-sm text-muted-foreground">Dark mode is automatically handled by your system preference. The application uses a responsive theme defined in <code className="text-xs bg-muted p-1 rounded">globals.css</code>.</p>
         </div>
       </CardContent>
     </Card>
   );
+
 
   const renderUserProfileView = () => (
      <Card className="shadow-lg h-full">
