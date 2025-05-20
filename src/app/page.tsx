@@ -7,11 +7,10 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { 
+import {
   Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2, FileText, Trash2, Download, Users, Settings, UserCircle, LayoutDashboard, FolderOpen, Edit, MessageSquare, Video, Palette, Landmark, Briefcase, Sigma, CircleHelp, FileAudio, Clock, Calendar, PlusCircle, ToggleLeft, ToggleRight, Headphones,
   Play, SkipBack, SkipForward, MicOff, Info, ListOrdered, UploadCloud, AudioLines, Volume2, Sun, Moon, Laptop, X, ListChecks, BookOpen, UserCheck, Tag
 } from 'lucide-react';
-// Removed AppLogo import as it's not directly used after UI changes
 import { transcribeAudioAction, searchTranscriptAction, diarizeTranscriptAction } from './actions';
 import type { SmartSearchInput, SmartSearchOutput } from '@/ai/flows/smart-search';
 import type { LiveTranscriptionInput } from '@/ai/flows/live-transcription';
@@ -23,7 +22,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem, SidebarMenuButton, SidebarInset, SidebarTrigger, SidebarFooter, useSidebar } from '@/components/ui/sidebar';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea'; 
+import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useTheme } from '@/components/theme-provider';
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -56,13 +55,13 @@ interface SavedTranscript {
 
 
 const speakerColors: { [key: string]: string } = {
-  DEFAULT: 'text-foreground', 
+  DEFAULT: 'text-foreground',
   THE_COURT: 'text-purple-600 dark:text-purple-400',
-  JUDGE: 'text-blue-600 dark:text-blue-400', 
+  JUDGE: 'text-blue-600 dark:text-blue-400',
   PROSECUTOR: 'text-orange-600 dark:text-orange-400',
-  COUNSEL: 'text-red-600 dark:text-red-400', 
-  DEFENSE: 'text-red-600 dark:text-red-400', 
-  WITNESS: 'text-green-600 dark:text-green-400', 
+  COUNSEL: 'text-red-600 dark:text-red-400',
+  DEFENSE: 'text-red-600 dark:text-red-400',
+  WITNESS: 'text-green-600 dark:text-green-400',
   PLAINTIFF: 'text-indigo-600 dark:text-indigo-400',
   DEFENDANT: 'text-pink-600 dark:text-pink-400',
 };
@@ -91,13 +90,13 @@ export default function CourtProceedingsPage() {
   const [recordingState, setRecordingState] = useState<RecordingState>('idle');
   const [rawTranscript, setRawTranscript] = useState<string>('');
   const [diarizedTranscript, setDiarizedTranscript] = useState<DiarizedSegment[] | null>(null);
-  
-  const [searchTerm, setSearchTerm] = useState<string>(''); 
-  const [transcriptSearchTerm, setTranscriptSearchTerm] = useState<string>(''); 
+
+  const [searchTerm, setSearchTerm] = useState<string>('');
+  const [transcriptSearchTerm, setTranscriptSearchTerm] = useState<string>('');
   const [isSearching, setIsSearching] = useState<boolean>(false);
   const [searchResults, setSearchResults] = useState<SmartSearchOutput | null>(null);
   const [searchError, setSearchError] = useState<string | null>(null);
-  
+
   const [isTranscribingChunk, setIsTranscribingChunk] = useState<boolean>(false);
   const [isSaving, setIsSaving] = useState<boolean>(false);
   const [isDiarizing, setIsDiarizing] = useState<boolean>(false);
@@ -110,7 +109,7 @@ export default function CourtProceedingsPage() {
   const [currentRecordingFullAudioUri, setCurrentRecordingFullAudioUri] = useState<string | null>(null);
   const [loadedAudioUri, setLoadedAudioUri] = useState<string | null>(null);
   const [isPlayingPlayback, setIsPlayingPlayback] = useState<boolean>(false);
-  
+
   const [activeView, setActiveView] = useState<ActiveView>('liveSession');
   const [elapsedTime, setElapsedTime] = useState<number>(0); // For recording timer and playback tracking
   const [playbackTime, setPlaybackTime] = useState<number>(0); // Specifically for audio element's current time
@@ -142,8 +141,8 @@ export default function CourtProceedingsPage() {
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
-  const transcriptScrollAreaRef = useRef<HTMLDivElement>(null); 
-  const liveTranscriptScrollAreaRef = useRef<HTMLDivElement>(null); 
+  const transcriptScrollAreaRef = useRef<HTMLDivElement>(null);
+  const liveTranscriptScrollAreaRef = useRef<HTMLDivElement>(null);
   const timerIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const dateTimeIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null);
@@ -156,7 +155,7 @@ export default function CourtProceedingsPage() {
   useEffect(() => {
     if (typeof window !== 'undefined') {
       setWaveformRandomValues(Array.from({ length: 80 }, () => Math.random()));
-      setCurrentDateTime(new Date());
+      setCurrentDateTime(new Date()); // Set initial date/time on client mount
       dateTimeIntervalRef.current = setInterval(() => {
         setCurrentDateTime(new Date());
       }, 1000 * 60); // Update every minute
@@ -175,12 +174,12 @@ export default function CourtProceedingsPage() {
     if (storedCustomTerms) {
       setCustomLegalTerms(storedCustomTerms);
     }
-    
+
     return () => {
       if (dateTimeIntervalRef.current) clearInterval(dateTimeIntervalRef.current);
       if (timerIntervalRef.current) clearInterval(timerIntervalRef.current);
     };
-  }, []); 
+  }, []);
 
   useEffect(() => {
     const getAudioDevices = async () => {
@@ -191,17 +190,17 @@ export default function CourtProceedingsPage() {
             }
             return;
         }
-        await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); // Request permission
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
         const devices = await navigator.mediaDevices.enumerateDevices();
         const inputs = devices.filter(device => device.kind === 'audioinput');
         const outputs = devices.filter(device => device.kind === 'audiooutput');
         setAudioInputDevices(inputs);
         setAudioOutputDevices(outputs);
         if (inputs.length > 0 && !selectedInputDevice) setSelectedInputDevice(inputs[0].deviceId);
-        if (outputs.length > 0 && !selectedOutputDevice) setSelectedOutputDevice('default');
+        if (outputs.length > 0 && !selectedOutputDevice) setSelectedOutputDevice('default'); // 'default' is often a valid deviceId for output
       } catch (err) {
         console.error("Error enumerating audio devices or getting permissions:", err);
-        if (activeView === 'settings') { 
+        if (activeView === 'settings') {
           toast({
               title: "Audio Device Error",
               description: "Could not access audio devices. Ensure microphone permissions are granted.",
@@ -211,7 +210,7 @@ export default function CourtProceedingsPage() {
       }
     };
 
-    if (activeView === 'settings' || (recordingState === 'idle' && !mediaRecorderRef.current)) { 
+    if (activeView === 'settings' || (recordingState === 'idle' && !mediaRecorderRef.current)) {
       getAudioDevices();
     }
   }, [activeView, toast, recordingState, selectedInputDevice, selectedOutputDevice]);
@@ -256,7 +255,7 @@ export default function CourtProceedingsPage() {
   const formatTime = (totalSeconds: number) => {
     const hours = Math.floor(totalSeconds / 3600);
     const minutes = Math.floor((totalSeconds % 3600) / 60);
-    const seconds = Math.floor(totalSeconds % 60); 
+    const seconds = Math.floor(totalSeconds % 60);
     return `${hours > 0 ? String(hours).padStart(2, '0') + ':' : ''}${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
   };
 
@@ -288,27 +287,27 @@ export default function CourtProceedingsPage() {
   const handleDiarizeTranscript = useCallback(async (audioUriToDiarize?: string, transcriptToDiarize?: string) => {
     const audioForDiarization = audioUriToDiarize || currentRecordingFullAudioUri || loadedAudioUri;
     const currentTranscript = transcriptToDiarize || rawTranscript;
-  
+
     if (isDiarizing) {
       toast({ title: 'Diarization in Progress', description: 'Please wait for the current diarization to complete.', variant: 'default' });
       return;
     }
     if (!audioForDiarization || !currentTranscript.trim()) {
-      const isExplicitAttempt = !!(audioUriToDiarize || transcriptToDiarize) || 
+      const isExplicitAttempt = !!(audioUriToDiarize || transcriptToDiarize) ||
                                 (activeView === 'transcriptions' && !!(currentRecordingFullAudioUri || loadedAudioUri)) ||
-                                (activeView === 'liveSession' && (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri) && rawTranscript.trim())); 
+                                (activeView === 'liveSession' && (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri) && rawTranscript.trim()));
       if (isExplicitAttempt) {
           toast({ title: 'Diarization Skipped', description: 'Full audio and raw transcript are required.', variant: 'default' });
       }
-      setDiarizedTranscript(null); 
+      setDiarizedTranscript(null);
       return;
     }
 
     setIsDiarizing(true);
-    setDiarizedTranscript(null); 
+    setDiarizedTranscript(null);
     try {
-      const input: DiarizeTranscriptInput = { 
-        audioDataUri: audioForDiarization, 
+      const input: DiarizeTranscriptInput = {
+        audioDataUri: audioForDiarization,
         rawTranscript: currentTranscript,
         customTerms: customLegalTerms || undefined,
       };
@@ -318,12 +317,12 @@ export default function CourtProceedingsPage() {
         toast({ title: 'Diarization Complete', description: 'Transcript has been segmented by speaker.', icon: <CheckCircle2 className="h-5 w-5 text-green-500" /> });
       } else if (response.error) {
         toast({ title: 'Diarization Failed', description: response.error, variant: 'destructive' });
-        setDiarizedTranscript([{speaker: "Error", text: "Diarization failed. Raw transcript retained."}]); 
+        setDiarizedTranscript([{speaker: "Error", text: "Diarization failed. Raw transcript retained."}]);
       }
     } catch (error) {
       const message = error instanceof Error ? error.message : 'An unknown error occurred during diarization.';
       toast({ title: 'Diarization Exception', description: message, variant: 'destructive' });
-       setDiarizedTranscript([{speaker: "Error", text: "Diarization exception. Raw transcript retained."}]); 
+       setDiarizedTranscript([{speaker: "Error", text: "Diarization exception. Raw transcript retained."}]);
     } finally {
       setIsDiarizing(false);
     }
@@ -331,28 +330,37 @@ export default function CourtProceedingsPage() {
 
 
   const handleStartRecording = async () => {
-    if (recordingState === 'idle' || recordingState === 'paused') { 
+    if (typeof navigator.mediaDevices?.getUserMedia !== 'function') {
+      toast({
+        title: "Audio Feature Not Supported",
+        description: "Your browser does not support the necessary audio recording features, or you are in an insecure context (non-HTTPS).",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (recordingState === 'idle' || recordingState === 'paused') {
       try {
         if(isPlayingPlayback && audioPlayerRef.current) {
             audioPlayerRef.current.pause();
             setIsPlayingPlayback(false);
         }
 
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: selectedInputDevice ? { deviceId: { exact: selectedInputDevice } } : true 
+        const stream = await navigator.mediaDevices.getUserMedia({
+            audio: selectedInputDevice ? { deviceId: { exact: selectedInputDevice } } : true
         });
-        mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' }); 
+        mediaRecorderRef.current = new MediaRecorder(stream, { mimeType: 'audio/webm' });
 
         mediaRecorderRef.current.ondataavailable = async (event) => {
           if (event.data.size > 0) {
             audioChunksRef.current.push(event.data);
-            if (autoTranscription && recordingState === 'recording') { 
+            if (autoTranscription && recordingState === 'recording') {
               setIsTranscribingChunk(true);
               try {
                 const audioBlob = new Blob([event.data], { type: event.data.type || 'audio/webm' });
                 const audioDataUri = await blobToDataURI(audioBlob);
-                const transcriptionInput: LiveTranscriptionInput = { 
-                  audioDataUri, 
+                const transcriptionInput: LiveTranscriptionInput = {
+                  audioDataUri,
                   customTerms: customLegalTerms || undefined,
                 };
                 const result = await transcribeAudioAction(transcriptionInput);
@@ -370,17 +378,17 @@ export default function CourtProceedingsPage() {
             }
           }
         };
-        
+
         mediaRecorderRef.current.onstart = () => {
           const initialIdle = recordingState === 'idle';
           setRecordingState('recording');
           if(initialIdle) {
-            setElapsedTime(0); 
-            setRawTranscript(''); 
+            setElapsedTime(0);
+            setRawTranscript('');
             setDiarizedTranscript(null);
             setCurrentRecordingFullAudioUri(null);
-            setLoadedAudioUri(null); 
-            setAnnotations([]); 
+            setLoadedAudioUri(null);
+            setAnnotations([]);
             setCaseJudge('');
             setCaseHearingType('');
             setCaseCourtroom('');
@@ -398,37 +406,37 @@ export default function CourtProceedingsPage() {
            setRecordingState('paused');
            toast({ title: 'Recording Paused', icon: <Pause className="h-5 w-5 text-yellow-500" /> });
         };
-        
-        mediaRecorderRef.current.onresume = () => { 
+
+        mediaRecorderRef.current.onresume = () => {
           setRecordingState('recording');
           toast({ title: 'Recording Resumed', icon: <Mic className="h-5 w-5 text-green-500" /> });
         };
 
         mediaRecorderRef.current.onstop = async () => {
-          const previousState = recordingState; 
+          const previousState = recordingState;
           setRecordingState('idle');
           stream.getTracks().forEach(track => track.stop());
-          
-          if (previousState === 'recording' || previousState === 'paused') { 
+
+          if (previousState === 'recording' || previousState === 'paused') {
             toast({ title: 'Recording Stopped', icon: <Square className="h-5 w-5 text-red-500" /> });
           }
-          
+
           if (audioChunksRef.current.length > 0) {
             const fullAudioBlob = new Blob(audioChunksRef.current, { type: audioChunksRef.current[0]?.type || 'audio/webm' });
             try {
               const audioDataUri = await blobToDataURI(fullAudioBlob);
               setCurrentRecordingFullAudioUri(audioDataUri);
-              setLoadedAudioUri(audioDataUri); // Make it available for immediate playback
-              if (audioPlayerRef.current) { 
+              setLoadedAudioUri(audioDataUri);
+              if (audioPlayerRef.current) {
                 audioPlayerRef.current.src = audioDataUri;
                 audioPlayerRef.current.load();
                 audioPlayerRef.current.onloadedmetadata = () => {
                     if (audioPlayerRef.current) setAudioDuration(audioPlayerRef.current.duration);
-                    setPlaybackTime(0); // Reset playback time
+                    setPlaybackTime(0);
                 };
               }
-              if (rawTranscript.trim() && audioDataUri && !diarizedTranscript) { 
-                setTimeout(() => handleDiarizeTranscript(audioDataUri, rawTranscript), 0); 
+              if (rawTranscript.trim() && audioDataUri && !diarizedTranscript) {
+                setTimeout(() => handleDiarizeTranscript(audioDataUri, rawTranscript), 0);
               }
             } catch (error) {
               console.error("Error creating full audio URI:", error);
@@ -437,11 +445,11 @@ export default function CourtProceedingsPage() {
           }
           mediaRecorderRef.current = null;
         };
-        
-        if (recordingState === 'paused' && mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') { 
+
+        if (recordingState === 'paused' && mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
              mediaRecorderRef.current.resume();
-        } else { 
-            mediaRecorderRef.current.start(5000); 
+        } else {
+            mediaRecorderRef.current.start(5000);
         }
 
       } catch (error) {
@@ -456,32 +464,31 @@ export default function CourtProceedingsPage() {
       mediaRecorderRef.current.pause();
     }
   };
-  
-  const handleResumeRecording = () => { 
+
+  const handleResumeRecording = () => {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
-      mediaRecorderRef.current.resume(); 
+      mediaRecorderRef.current.resume();
     } else {
-      handleStartRecording(); 
+      handleStartRecording();
     }
   };
 
   const handleStopRecordingOrPlayback = () => {
     if (mediaRecorderRef.current && (mediaRecorderRef.current.state === 'recording' || mediaRecorderRef.current.state === 'paused')) {
-      mediaRecorderRef.current.stop(); // This will set recordingState to 'idle' and handle diarization
+      mediaRecorderRef.current.stop();
     } else if (recordingState === 'idle' && isPlayingPlayback && audioPlayerRef.current) {
       audioPlayerRef.current.pause();
-      audioPlayerRef.current.currentTime = 0; 
+      audioPlayerRef.current.currentTime = 0;
       setIsPlayingPlayback(false);
       setPlaybackTime(0);
       toast({ title: "Playback Stopped" });
-    } else if (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri || rawTranscript || currentSessionTitle !== 'Untitled Session' || caseJudge || caseHearingType || caseCourtroom || caseParticipants.length > 0 || annotations.length > 0)) {
-      // Clear session data
+    } else if (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri || rawTranscript || diarizedTranscript || currentSessionTitle !== 'Untitled Session' || caseJudge || caseHearingType || caseCourtroom || caseParticipants.length > 0 || annotations.length > 0)) {
       setRawTranscript('');
       setDiarizedTranscript(null);
       setCurrentRecordingFullAudioUri(null);
       setLoadedAudioUri(null);
       if (audioPlayerRef.current) {
-        audioPlayerRef.current.src = ''; 
+        audioPlayerRef.current.src = '';
         audioPlayerRef.current.load();
         setAudioDuration(0);
       }
@@ -498,14 +505,14 @@ export default function CourtProceedingsPage() {
       toast({title: "Session Data Cleared", description: "Current audio, transcript, case details, and annotations have been cleared."});
     }
   };
-  
+
   const toggleMainRecordingOrPlayback = () => {
     if (recordingState === 'recording') {
       handlePauseRecording();
     } else if (recordingState === 'paused') {
       handleResumeRecording();
     } else if (recordingState === 'idle') {
-      if (currentRecordingFullAudioUri || loadedAudioUri) { 
+      if (currentRecordingFullAudioUri || loadedAudioUri) {
         if (audioPlayerRef.current) {
           if (isPlayingPlayback) {
             audioPlayerRef.current.pause();
@@ -516,7 +523,7 @@ export default function CourtProceedingsPage() {
             });
           }
         }
-      } else { 
+      } else {
         handleStartRecording();
       }
     }
@@ -527,7 +534,7 @@ export default function CourtProceedingsPage() {
       toast({ title: "Cannot Save", description: "No data to save.", variant: "destructive" });
       return;
     }
-    if (!currentSessionTitle.trim() || currentSessionTitle === "Untitled Session") { 
+    if (!currentSessionTitle.trim() || currentSessionTitle === "Untitled Session") {
         const now = new Date();
         setCurrentSessionTitle(`Court Session - ${now.toLocaleDateString()} ${now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`);
     }
@@ -540,14 +547,14 @@ export default function CourtProceedingsPage() {
       return;
     }
     setIsSaving(true);
-    
+
     const newSavedTranscript: SavedTranscript = {
       id: Date.now().toString(),
       timestamp: Date.now(),
       title: currentSessionTitle,
       rawTranscript: rawTranscript,
       diarizedTranscript: diarizedTranscript,
-      audioDataUri: currentRecordingFullAudioUri || loadedAudioUri, 
+      audioDataUri: currentRecordingFullAudioUri || loadedAudioUri,
       judge: caseJudge,
       hearingType: caseHearingType,
       courtroom: caseCourtroom,
@@ -555,12 +562,12 @@ export default function CourtProceedingsPage() {
       annotations: annotations,
     };
     persistSavedTranscripts([newSavedTranscript, ...savedTranscripts]);
-    
+
     setIsSaving(false);
     setShowSaveDialog(false);
     toast({ title: 'Transcript Saved', description: `"${newSavedTranscript.title}" has been saved.`, icon: <CheckCircle2 className="h-5 w-5 text-green-500" /> });
   };
-  
+
   const handleDeleteSavedTranscript = (id: string) => {
     const updated = savedTranscripts.filter(t => t.id !== id);
     persistSavedTranscripts(updated);
@@ -575,21 +582,21 @@ export default function CourtProceedingsPage() {
     setRawTranscript(selectedTranscript.rawTranscript);
     setDiarizedTranscript(selectedTranscript.diarizedTranscript || null);
     const audioToLoad = selectedTranscript.audioDataUri || null;
-    setLoadedAudioUri(audioToLoad); 
-    setCurrentRecordingFullAudioUri(null); 
-    setCurrentSessionTitle(selectedTranscript.title || "Untitled Session"); 
+    setLoadedAudioUri(audioToLoad);
+    setCurrentRecordingFullAudioUri(null);
+    setCurrentSessionTitle(selectedTranscript.title || "Untitled Session");
     setCaseJudge(selectedTranscript.judge || '');
     setCaseHearingType(selectedTranscript.hearingType || '');
     setCaseCourtroom(selectedTranscript.courtroom || '');
     setCaseParticipants(selectedTranscript.participants || []);
     setAnnotations(selectedTranscript.annotations || []);
-    setElapsedTime(0); 
+    setElapsedTime(0);
     setPlaybackTime(0);
     setIsPlayingPlayback(false);
-    
+
     if (audioPlayerRef.current && audioToLoad) {
       audioPlayerRef.current.src = audioToLoad;
-      audioPlayerRef.current.load(); 
+      audioPlayerRef.current.load();
       audioPlayerRef.current.onloadedmetadata = () => {
         if (audioPlayerRef.current) setAudioDuration(audioPlayerRef.current.duration);
         setPlaybackTime(0);
@@ -599,9 +606,9 @@ export default function CourtProceedingsPage() {
       audioPlayerRef.current.load();
       setAudioDuration(0);
     }
-    
+
     toast({ title: 'Transcript Loaded', description: `"${selectedTranscript.title || "Untitled Session"}" is now active.` });
-    setActiveView("liveSession"); 
+    setActiveView("liveSession");
 
     if (audioToLoad && selectedTranscript.rawTranscript.trim() && !selectedTranscript.diarizedTranscript) {
       setTimeout(() => handleDiarizeTranscript(audioToLoad, selectedTranscript.rawTranscript), 0);
@@ -635,7 +642,7 @@ export default function CourtProceedingsPage() {
       setIsSearching(false);
     }
   };
-  
+
   const handleExportTranscript = (format: 'txt' | 'csv' | 'pdf' | 'docx') => {
     const transcriptContentForTxt = diarizedTranscript
       ? diarizedTranscript.map(s => `${s.speaker}:\n${s.text}`).join('\n\n')
@@ -666,18 +673,23 @@ export default function CourtProceedingsPage() {
       case 'csv':
         filename = `${sanitizedTitle}.csv`;
         mimeType = 'text/csv;charset=utf-8';
-        let csvContent = 'Speaker,Text\n'; 
+        let csvHeader = "Timestamp (seconds),Speaker,Text\n";
+        let csvContent = "";
         if (diarizedTranscript && diarizedTranscript.length > 0) {
-          csvContent += diarizedTranscript
-            .map(segment => `"${segment.speaker.replace(/"/g, '""')}","${segment.text.replace(/"/g, '""')}"`)
+          // Assuming annotations timestamps might be relevant if we align them.
+          // For simplicity, if diarized, we just use speaker and text for now.
+          // For accurate timestamped CSV, would need timing info per segment from diarization.
+          // Placeholder: just speaker and text
+          csvContent = diarizedTranscript
+            .map(segment => `,"${segment.speaker.replace(/"/g, '""')}","${segment.text.replace(/"/g, '""')}"`) // Empty timestamp for now
             .join('\n');
         } else if (rawTranscript.trim()) {
-          csvContent += `"Unknown Speaker","${rawTranscript.replace(/"/g, '""')}"`;
+          csvContent = `,"Unknown Speaker","${rawTranscript.replace(/"/g, '""')}"`;
         } else {
           toast({ title: "Cannot Export CSV", description: "No transcript data to export.", variant: "destructive" });
           return;
         }
-        blob = new Blob([csvContent], { type: mimeType });
+        blob = new Blob([csvHeader + csvContent], { type: mimeType });
         break;
       case 'pdf':
         toast({ title: "PDF Export", description: "PDF export functionality is planned for a future update.", variant: "default" });
@@ -701,6 +713,7 @@ export default function CourtProceedingsPage() {
     toast({ title: 'Export Started', description: `"${filename}" is downloading.`, icon: <Download className="h-4 w-4" /> });
   };
 
+
   const canManuallyDiarize = recordingState === 'idle' && !!rawTranscript.trim() && !!(currentRecordingFullAudioUri || loadedAudioUri) && !isDiarizing;
   const canSave = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript || !!currentRecordingFullAudioUri || !!loadedAudioUri || (currentSessionTitle !== 'Untitled Session' && currentSessionTitle.trim() !== '') || annotations.length > 0 || caseJudge.trim() !== '' || caseHearingType.trim() !== '' || caseCourtroom.trim() !== '' || caseParticipants.length > 0);
   const canDownload = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript);
@@ -718,7 +731,7 @@ export default function CourtProceedingsPage() {
   const handleClearLocalStorage = () => {
     try {
       localStorage.removeItem('naijaLawScribeTranscripts');
-      localStorage.removeItem('naijaLawScribeCustomTerms'); 
+      localStorage.removeItem('naijaLawScribeCustomTerms');
       setSavedTranscripts([]);
       setCustomLegalTerms('');
       toast({ title: 'Local Storage Cleared', description: 'All saved sessions and custom terms have been removed from local storage.', variant: 'destructive' });
@@ -760,9 +773,9 @@ export default function CourtProceedingsPage() {
       timestamp: timestamp,
       tag: selectedAnnotationTag || undefined,
     };
-    setAnnotations(prev => [newAnnotation, ...prev].sort((a,b) => b.timestamp - a.timestamp)); 
+    setAnnotations(prev => [...prev, newAnnotation].sort((a,b) => b.timestamp - a.timestamp));
     setNewAnnotationText('');
-    setSelectedAnnotationTag('');
+    setSelectedAnnotationTag(''); // Reset selected tag after adding
     toast({title: "Annotation Added", icon: <CheckCircle2 className="h-4 w-4 text-green-500"/>});
   };
 
@@ -776,11 +789,11 @@ export default function CourtProceedingsPage() {
 
     const newAnnotation: Annotation = {
       id: Date.now().toString(),
-      text: tag, 
+      text: tag,
       timestamp: timestamp,
-      tag: tag, 
+      tag: tag,
     };
-    setAnnotations(prev => [newAnnotation, ...prev].sort((a,b) => b.timestamp - a.timestamp));
+    setAnnotations(prev => [...prev, newAnnotation].sort((a,b) => b.timestamp - a.timestamp));
     toast({title: `Quick Tag Added: ${tag}`, icon: <Tag className="h-4 w-4 text-primary"/>});
   };
 
@@ -812,22 +825,22 @@ export default function CourtProceedingsPage() {
   const renderLiveSessionView = () => (
     <div className="h-full flex flex-col bg-background text-foreground">
       {renderLiveSessionHeader()}
-      
+
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-        {/* Left Panel: Case Details */}
-        <div className="w-full lg:w-64 xl:w-72 bg-muted/30 p-2 md:p-3 border-b lg:border-b-0 lg:border-r order-1 lg:order-1 overflow-y-auto"> 
-          <Card className="shadow-sm h-full">
+        {/* Left Panel: Case Details - Full width on mobile, fixed on lg+ */}
+        <div className="w-full lg:w-64 xl:w-72 bg-muted/30 p-2 md:p-3 border-b lg:border-b-0 lg:border-r order-1 lg:order-1 overflow-y-auto">
+          <Card id="case-details-card" className="shadow-sm h-full">
             <CardHeader className="p-2 md:p-3">
               <CardTitle className="text-sm md:text-base">Case Details</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 md:space-y-3 text-xs md:text-sm px-2 md:px-3 pb-2 md:pb-3">
               <div>
                 <Label htmlFor="case-title" className="text-xs text-muted-foreground">Case Title / Number</Label>
-                <Input 
+                <Input
                   id="case-title"
-                  type="text" 
-                  value={currentSessionTitle} 
-                  onChange={(e) => setCurrentSessionTitle(e.target.value)} 
+                  type="text"
+                  value={currentSessionTitle}
+                  onChange={(e) => setCurrentSessionTitle(e.target.value)}
                   placeholder="Enter case title or number..."
                   className="text-xs md:text-sm h-8 md:h-9 mt-1 bg-card"
                   disabled={recordingState !== 'idle'}
@@ -836,11 +849,11 @@ export default function CourtProceedingsPage() {
               </div>
               <div>
                 <Label htmlFor="case-judge" className="text-xs text-muted-foreground">Judge</Label>
-                <Input 
+                <Input
                   id="case-judge"
-                  type="text" 
-                  value={caseJudge} 
-                  onChange={(e) => setCaseJudge(e.target.value)} 
+                  type="text"
+                  value={caseJudge}
+                  onChange={(e) => setCaseJudge(e.target.value)}
                   placeholder="Enter judge's name..."
                   className="text-xs md:text-sm h-8 md:h-9 mt-1 bg-card"
                   disabled={recordingState !== 'idle'}
@@ -849,11 +862,11 @@ export default function CourtProceedingsPage() {
               </div>
               <div>
                 <Label htmlFor="case-hearing-type" className="text-xs text-muted-foreground">Hearing Type</Label>
-                <Input 
+                <Input
                   id="case-hearing-type"
-                  type="text" 
-                  value={caseHearingType} 
-                  onChange={(e) => setCaseHearingType(e.target.value)} 
+                  type="text"
+                  value={caseHearingType}
+                  onChange={(e) => setCaseHearingType(e.target.value)}
                   placeholder="e.g., Motion, Arraignment"
                   className="text-xs md:text-sm h-8 md:h-9 mt-1 bg-card"
                   disabled={recordingState !== 'idle'}
@@ -862,11 +875,11 @@ export default function CourtProceedingsPage() {
               </div>
               <div>
                 <Label htmlFor="case-courtroom" className="text-xs text-muted-foreground">Courtroom</Label>
-                <Input 
+                <Input
                   id="case-courtroom"
-                  type="text" 
-                  value={caseCourtroom} 
-                  onChange={(e) => setCaseCourtroom(e.target.value)} 
+                  type="text"
+                  value={caseCourtroom}
+                  onChange={(e) => setCaseCourtroom(e.target.value)}
                   placeholder="Enter courtroom number/name"
                   className="text-xs md:text-sm h-8 md:h-9 mt-1 bg-card"
                   disabled={recordingState !== 'idle'}
@@ -879,25 +892,25 @@ export default function CourtProceedingsPage() {
                 {caseParticipants.map((participant, index) => (
                   <div key={index} className="flex items-center justify-between bg-card p-1.5 rounded border text-xs">
                     <span className="flex items-center"><UserCircle className="mr-1.5 text-primary" size={14} /> {participant}</span>
-                    <Button 
-                      variant="ghost" 
-                      size="icon" 
+                    <Button
+                      variant="ghost"
+                      size="icon"
                       className="h-5 w-5 md:h-6 md:w-6 text-muted-foreground hover:text-destructive"
                       onClick={() => handleRemoveParticipant(participant)}
                       disabled={recordingState !== 'idle'}
                       aria-label={`Remove ${participant}`}
                     >
-                      <X size={12} md={14} />
+                      <X size={12} />
                     </Button>
                   </div>
                 ))}
                  {caseParticipants.length === 0 && <p className="text-xs text-muted-foreground">No participants added.</p>}
               </div>
               <div className="flex items-center gap-2 mt-2">
-                <Input 
-                  type="text" 
-                  value={newParticipantName} 
-                  onChange={(e) => setNewParticipantName(e.target.value)} 
+                <Input
+                  type="text"
+                  value={newParticipantName}
+                  onChange={(e) => setNewParticipantName(e.target.value)}
                   placeholder="Add participant name..."
                   className="text-xs h-8 flex-grow bg-card"
                   disabled={recordingState !== 'idle'}
@@ -928,7 +941,7 @@ export default function CourtProceedingsPage() {
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={() => handleExportTranscript('pdf')} disabled={!canDownload}>
-                    <FileText className="mr-2 h-4 w-4" /> PDF (.pdf) 
+                    <FileText className="mr-2 h-4 w-4" /> PDF (.pdf)
                     <Badge variant="outline" className="ml-2 text-xs">Planned</Badge>
                   </DropdownMenuItem>
                   <DropdownMenuItem onClick={() => handleExportTranscript('docx')} disabled={!canDownload}>
@@ -940,11 +953,10 @@ export default function CourtProceedingsPage() {
             </CardFooter>
           </Card>
         </div>
-        
-        {/* Middle Panel: Main Recording/Transcript */}
+
+        {/* Middle Panel: Main Recording/Transcript - Full width on mobile, flex-1 on lg+ */}
         <div className="flex-1 flex flex-col overflow-hidden p-2 md:p-3 order-2 lg:order-2">
-          {/* Audio Recording Card */}
-          <Card className="shadow-sm mb-2 md:mb-3">
+          <Card id="audio-recording-card" className="shadow-sm mb-2 md:mb-3">
             <CardHeader className="p-2 md:p-3">
               <div className="flex flex-col sm:flex-row items-center justify-between">
                 <CardTitle className="text-sm md:text-base mb-1 sm:mb-0">Audio Recording</CardTitle>
@@ -964,19 +976,19 @@ export default function CourtProceedingsPage() {
                     <div className="absolute inset-0 flex items-center justify-center px-0.5 sm:px-1 overflow-hidden">
                       {waveformRandomValues.length === 80 && Array.from({ length: 80 }).map((_, i) => {
                           const isActiveBar = (recordingState === 'recording' || isPlayingPlayback);
-                          const currentProgressPercent = isPlayingPlayback ? (playbackTime / audioDuration) * 100 : (elapsedTime % 80) / 80 * 100; // Crude for recording
-                          const barIsActive = isActiveBar && i < (isPlayingPlayback ? (playbackTime / audioDuration) * 80 : elapsedTime % 80) ;
+                          // const currentProgressPercent = isPlayingPlayback ? (playbackTime / audioDuration) * 100 : (elapsedTime % 80) / 80 * 100;
+                          const barIsActive = isActiveBar && i < (isPlayingPlayback ? (playbackTime / audioDuration) * 80 : (elapsedTime * (80 / (audioDuration||60) )) % 80 ) ; // Crude approximation for recording progress bar display
 
                           const randomHeightFactor = waveformRandomValues[i] || 0.5;
-                          const actualRandomHeight = randomHeightFactor * 60 + 20; // Base height 20-80%
+                          const actualRandomHeight = randomHeightFactor * 60 + 20;
                           const dynamicHeight = (isActiveBar && recordingState !== 'paused')
-                                                ? actualRandomHeight 
-                                                : (recordingState === 'paused' ? 30 : 15); // quiescent height
+                                                ? actualRandomHeight
+                                                : (recordingState === 'paused' ? 30 : 15);
                         return (
-                          <div 
+                          <div
                             key={i}
                             className={`mx-px rounded-sm transition-all duration-150 ease-out ${ recordingState === 'paused' ? 'bg-yellow-500/50' : (barIsActive ? 'bg-primary' : 'bg-primary/50')}`}
-                            style={{ 
+                            style={{
                               height: `${dynamicHeight}%`,
                               width: 'calc(100% / 80 - 1px)',
                             }}
@@ -986,15 +998,15 @@ export default function CourtProceedingsPage() {
                       })}
                     </div>
                      {(loadedAudioUri || currentRecordingFullAudioUri) && recordingState === 'idle' && (
-                        <audio 
+                        <audio
                           ref={audioPlayerRef}
-                          src={loadedAudioUri || currentRecordingFullAudioUri || undefined} 
-                          className="w-full hidden" 
+                          src={loadedAudioUri || currentRecordingFullAudioUri || undefined}
+                          className="w-full hidden" // Hidden: custom controls used
                           onPlay={() => setIsPlayingPlayback(true)}
                           onPause={() => setIsPlayingPlayback(false)}
                           onEnded={() => {
                               setIsPlayingPlayback(false);
-                              if (audioPlayerRef.current) audioPlayerRef.current.currentTime = 0; 
+                              if (audioPlayerRef.current) audioPlayerRef.current.currentTime = 0;
                               setPlaybackTime(0);
                           }}
                           onTimeUpdate={() => {
@@ -1024,10 +1036,11 @@ export default function CourtProceedingsPage() {
                   </div>
                 </div>
               </div>
-              
-              <div className="flex justify-center items-center space-x-2 sm:space-x-3 mt-2 md:mt-3">
-                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground h-8 w-8 sm:h-9 sm:w-9"><SkipBack size={16} sm={18} /></Button></TooltipTrigger><TooltipContent><p>Previous Segment (Disabled)</p></TooltipContent></Tooltip>
-                  <Button 
+
+              <div className="flex justify-center items-center space-x-1 sm:space-x-2 mt-2 md:mt-3">
+                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground h-8 w-8 sm:h-9 sm:w-9"><SkipBack size={16} /></Button></TooltipTrigger><TooltipContent><p>Previous Segment (Disabled)</p></TooltipContent></Tooltip>
+                <Button
+                  id="main-record-play-pause-button"
                   onClick={toggleMainRecordingOrPlayback}
                   size="icon"
                   className={`p-2 sm:p-2.5 rounded-full ${recordingState === 'recording' ? 'bg-red-600 hover:bg-red-700' : (recordingState === 'paused' || isPlayingPlayback) ? 'bg-yellow-500 hover:bg-yellow-600 text-yellow-foreground' : 'bg-primary hover:bg-primary/90'} text-primary-foreground w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14`}
@@ -1036,23 +1049,25 @@ export default function CourtProceedingsPage() {
                   {(recordingState === 'recording' || isPlayingPlayback) ? <Pause size={18} sm={20} md={24} /> : <Play size={18} sm={20} md={24} />}
                 </Button>
                 {((recordingState === 'recording' || recordingState === 'paused') || (isPlayingPlayback && (loadedAudioUri || currentRecordingFullAudioUri))) && (
-                    <Button onClick={handleStopRecordingOrPlayback} variant="destructive" size="icon" className="p-2 sm:p-2.5 rounded-full border-destructive text-destructive-foreground hover:bg-destructive/90 w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14" 
-                            aria-label={(recordingState === 'recording' || recordingState === 'paused') ? "Stop Recording" : "Stop Playback"}>
+                    <Button
+                      id="main-record-stop-button"
+                      onClick={handleStopRecordingOrPlayback} variant="destructive" size="icon" className="p-2 sm:p-2.5 rounded-full border-destructive text-destructive-foreground hover:bg-destructive/90 w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14"
+                      aria-label={(recordingState === 'recording' || recordingState === 'paused') ? "Stop Recording" : "Stop Playback"}>
                       <Square size={18} sm={20} md={24}/>
                     </Button>
                 )}
-                  {(recordingState === 'idle' && !isPlayingPlayback && (rawTranscript || diarizedTranscript || currentRecordingFullAudioUri || loadedAudioUri || currentSessionTitle !== 'Untitled Session' || caseJudge || caseHearingType || caseCourtroom || caseParticipants.length > 0 || annotations.length > 0)) && ( 
+                  {(recordingState === 'idle' && !isPlayingPlayback && (rawTranscript || diarizedTranscript || currentRecordingFullAudioUri || loadedAudioUri || currentSessionTitle !== 'Untitled Session' || caseJudge || caseHearingType || caseCourtroom || caseParticipants.length > 0 || annotations.length > 0)) && (
                       <Button onClick={handleStopRecordingOrPlayback} variant="outline" size="icon" className="p-2 sm:p-2.5 rounded-full w-10 h-10 sm:w-12 sm:h-12 md:w-14 md:h-14" aria-label="Clear Current Session Data">
                           <Trash2 size={18} sm={20} md={24}/>
                       </Button>
                   )}
-                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground h-8 w-8 sm:h-9 sm:w-9"><SkipForward size={16} sm={18} /></Button></TooltipTrigger><TooltipContent><p>Next Segment (Disabled)</p></TooltipContent></Tooltip>
+                <Tooltip><TooltipTrigger asChild><Button variant="ghost" size="icon" disabled className="text-muted-foreground h-8 w-8 sm:h-9 sm:w-9"><SkipForward size={16} /></Button></TooltipTrigger><TooltipContent><p>Next Segment (Disabled)</p></TooltipContent></Tooltip>
               </div>
-              
+
               <div className="flex flex-col sm:flex-row justify-between items-center mt-2 md:mt-3 text-xs">
                 <div className="flex items-center mb-2 sm:mb-0">
                   <Button variant="outline" size="sm" className="mr-2 h-7 sm:h-8" disabled>
-                    {(recordingState !== 'idle' || isPlayingPlayback) ? <Mic size={12} sm={14} className="text-green-500" /> : <MicOff size={12} sm={14} />} 
+                    {(recordingState !== 'idle' || isPlayingPlayback) ? <Mic size={12} sm={14} className="text-green-500" /> : <MicOff size={12} sm={14} />}
                     <span className="ml-1">{(recordingState !== 'idle') ? "Mic Active" : (isPlayingPlayback ? "Audio Playing" : "Mic Off")}</span>
                   </Button>
                     <div className="flex items-center space-x-1 sm:space-x-2">
@@ -1067,7 +1082,7 @@ export default function CourtProceedingsPage() {
               </div>
                 {(isTranscribingChunk || (recordingState === 'recording' && !isTranscribingChunk && autoTranscription)) && (
                   <div className="mt-1 md:mt-2 text-xs text-muted-foreground flex items-center">
-                    {isTranscribingChunk ? 
+                    {isTranscribingChunk ?
                       <><Loader2 className="h-3 w-3 animate-spin mr-1" /> Transcribing audio chunk...</> :
                       <><Mic className="h-3 w-3 text-red-500 animate-pulse mr-1" /> Listening...</>
                     }
@@ -1075,16 +1090,15 @@ export default function CourtProceedingsPage() {
                 )}
             </CardContent>
           </Card>
-          
-          {/* Real-time Transcript Card */}
-          <Card className="flex-1 shadow-sm overflow-hidden">
+
+          <Card id="real-time-transcript-card" className="flex-1 shadow-sm overflow-hidden">
              <CardHeader className="p-2 md:p-3">
                 <div className="flex flex-col sm:flex-row items-center justify-between">
                   <CardTitle className="text-sm md:text-base mb-1 sm:mb-0">Real-time Transcript</CardTitle>
-                  <div className="relative w-full sm:w-auto">
-                    <Input 
-                      type="text" 
-                      placeholder="Search transcript..." 
+                  <div className="relative w-full sm:w-auto mt-1 sm:mt-0">
+                    <Input
+                      type="text"
+                      placeholder="Search transcript..."
                       value={transcriptSearchTerm}
                       onChange={(e) => setTranscriptSearchTerm(e.target.value)}
                       className="pl-7 sm:pl-8 pr-3 sm:pr-4 py-1 text-xs sm:text-sm h-8 md:h-9 w-full sm:w-48 md:w-56 bg-card border-border focus:border-primary"
@@ -1095,8 +1109,8 @@ export default function CourtProceedingsPage() {
                 </div>
              </CardHeader>
             <CardContent className="h-full p-0">
-              <ScrollArea ref={liveTranscriptScrollAreaRef} className="h-[calc(100%-3rem)] md:h-[calc(100%-3.5rem)] w-full rounded-b-md"> {/* Adjust height based on header */}
-                <div className="p-2 md:p-3 space-y-2 md:space-y-3 font-mono text-xs leading-relaxed">
+              <ScrollArea ref={liveTranscriptScrollAreaRef} className="h-[calc(100vh-420px)] sm:h-[calc(100vh-400px)] md:h-[calc(100vh-350px)] lg:h-full w-full rounded-b-md"> {/* Adjusted height for better fit within card */}
+                <div className="p-2 md:p-3 space-y-2 md:space-y-3 font-mono text-xs sm:text-sm leading-relaxed">
                   {diarizedTranscript ? (
                       diarizedTranscript.map((segment, index) => (
                         (!transcriptSearchTerm || segment.text.toLowerCase().includes(transcriptSearchTerm.toLowerCase()) || segment.speaker.toLowerCase().includes(transcriptSearchTerm.toLowerCase())) && (
@@ -1114,7 +1128,7 @@ export default function CourtProceedingsPage() {
                         <span className="text-muted-foreground">Waiting for recording or transcription...</span>
                   )}
                   {isDiarizing && <div className="flex items-center text-muted-foreground"><Loader2 className="inline h-3 w-3 sm:h-4 sm:w-4 animate-spin mr-1" /> Identifying speakers...</div>}
-                  {recordingState === 'recording' && autoTranscription && !isTranscribingChunk && ( 
+                  {recordingState === 'recording' && autoTranscription && !isTranscribingChunk && (
                     <div className="flex items-center animate-pulse text-muted-foreground">
                       <div className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-primary mr-1 animate-ping delay-75"></div>
                       <div className="h-1 w-1 sm:h-1.5 sm:w-1.5 rounded-full bg-primary mr-1 animate-ping delay-150"></div>
@@ -1127,20 +1141,20 @@ export default function CourtProceedingsPage() {
             </CardContent>
           </Card>
         </div>
-        
-        {/* Right Panel: Annotations */}
+
+        {/* Right Panel: Annotations - Full width on mobile, fixed on lg+ */}
         <div className="w-full lg:w-64 xl:w-72 bg-muted/30 p-2 md:p-3 border-t lg:border-t-0 lg:border-l order-3 lg:order-3 overflow-y-auto">
-          <Card className="shadow-sm h-full">
+          <Card id="annotations-card" className="shadow-sm h-full">
             <CardHeader className="p-2 md:p-3">
               <CardTitle className="text-sm md:text-base">Annotations</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 md:space-y-3 text-xs md:text-sm px-2 md:px-3 pb-2 md:pb-3">
               <div className="mb-2 md:mb-3">
                 <Label htmlFor="annotation-text" className="block text-xs font-medium text-muted-foreground mb-1">Add Note</Label>
-                <Textarea 
+                <Textarea
                   id="annotation-text"
-                  className="w-full border rounded-md p-2 text-xs md:text-sm bg-card focus:border-primary" 
-                  rows={2} sm={3}
+                  className="w-full border rounded-md p-2 text-xs md:text-sm bg-card focus:border-primary"
+                  rows={2}
                   placeholder="Add note about current moment..."
                   value={newAnnotationText}
                   onChange={(e) => setNewAnnotationText(e.target.value)}
@@ -1162,13 +1176,13 @@ export default function CourtProceedingsPage() {
                   <Button size="sm" className="text-xs h-7 md:h-8" onClick={handleAddAnnotation} disabled={!newAnnotationText.trim()}>Add Note</Button>
                 </div>
               </div>
-              
+
               <Separator className="my-2 md:my-3"/>
               <h3 className="font-medium text-xs md:text-sm text-primary">Recent Annotations</h3>
               {annotations.length > 0 ? (
-                <ScrollArea className="h-32 sm:h-36"> 
+                <ScrollArea className="h-32 sm:h-36">
                   <div className="space-y-1.5 md:space-y-2">
-                  {annotations.slice(0, 5).map(ann => ( 
+                  {annotations.slice(0, 5).map(ann => (
                     <div key={ann.id} className="bg-card p-1.5 md:p-2 rounded border text-xs shadow-sm">
                       {ann.tag && <Badge variant="secondary" className="mb-1 text-xs">{ann.tag}</Badge>}
                       <p className="text-xs text-muted-foreground mb-0.5">Time: {formatTime(ann.timestamp)}</p>
@@ -1200,7 +1214,7 @@ export default function CourtProceedingsPage() {
           </Card>
         </div>
       </div>
-      
+
       <footer className="bg-muted/50 p-2 border-t">
         <div className="container mx-auto flex flex-col sm:flex-row justify-between items-center text-xs text-muted-foreground gap-1 sm:gap-2">
             <div className="flex items-center">
@@ -1224,7 +1238,7 @@ export default function CourtProceedingsPage() {
       </CardHeader>
       <CardContent className="flex-grow overflow-auto p-2 md:p-3">
         {savedTranscripts.length > 0 ? (
-          <ScrollArea className="h-full max-h-[calc(100vh-160px)] md:max-h-[calc(100vh-180px)]"> 
+          <ScrollArea className="h-full max-h-[calc(100vh-160px)] md:max-h-[calc(100vh-180px)]">
             <ul className="space-y-2">
               {savedTranscripts.sort((a,b) => b.timestamp - a.timestamp).map(st => (
                 <li key={st.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-2 md:p-3 border rounded-md hover:bg-muted/50 transition-colors shadow-sm bg-card">
@@ -1274,7 +1288,7 @@ export default function CourtProceedingsPage() {
      <Card className="shadow-lg h-full flex flex-col">
       <CardHeader className="p-2 md:p-4">
         <CardTitle className="text-base md:text-xl flex items-center">
-            <ListOrdered className="mr-2 h-5 w-5 md:h-6 md:w-6 text-primary" /> 
+            <ListOrdered className="mr-2 h-5 w-5 md:h-6 md:w-6 text-primary" />
             Active Transcript: <span className="ml-1.5 md:ml-2 font-normal text-sm md:text-lg break-all">{currentSessionTitle || "Untitled Session"}</span>
         </CardTitle>
         <CardDescription className="text-xs md:text-sm">Review the current transcript. Diarization attempts to run automatically if audio is available. Use controls to save or download.</CardDescription>
@@ -1283,12 +1297,12 @@ export default function CourtProceedingsPage() {
         {(currentRecordingFullAudioUri || loadedAudioUri) && (
           <div>
             <h3 className="text-sm md:text-base font-semibold mb-1 md:mb-1.5 text-primary">Audio Playback</h3>
-             <audio 
-                ref={el => { 
+             <audio
+                ref={el => {
                   if (el && activeView === 'transcriptions') audioPlayerRef.current = el;
                 }}
-                src={loadedAudioUri || currentRecordingFullAudioUri || undefined} 
-                controls 
+                src={loadedAudioUri || currentRecordingFullAudioUri || undefined}
+                controls // Show controls here for simplicity, or implement custom for this view too
                 className="w-full rounded-md shadow-sm"
                 onPlay={() => setIsPlayingPlayback(true)}
                 onPause={() => setIsPlayingPlayback(false)}
@@ -1311,7 +1325,7 @@ export default function CourtProceedingsPage() {
                     {isDiarizing && <Loader2 className="h-4 w-4 md:h-5 md:w-5 animate-spin text-primary" />}
                  </div>
             </div>
-          <ScrollArea ref={transcriptScrollAreaRef} className="h-[calc(100vh-280px)] sm:h-[calc(100vh-300px)] md:h-[calc(100vh-320px)] w-full rounded-md border p-2 md:p-3 bg-muted/30"> 
+          <ScrollArea ref={transcriptScrollAreaRef} className="h-[calc(100vh-320px)] sm:h-[calc(100vh-340px)] md:h-[calc(100vh-360px)] w-full rounded-md border p-2 md:p-3 bg-muted/30">
             {diarizedTranscript ? (
               <div className="space-y-2 md:space-y-3 font-mono text-xs md:text-sm leading-relaxed">
                 {diarizedTranscript.map((segment, index) => (
@@ -1329,7 +1343,7 @@ export default function CourtProceedingsPage() {
             ) : (
                 <div className="flex flex-col items-center justify-center h-full text-muted-foreground p-4">
                     <FileText className="w-10 h-10 md:w-16 md:h-16 mb-3 md:mb-4 opacity-50" />
-                    <span className="text-center text-sm md:text-base">No transcript available.</span> 
+                    <span className="text-center text-sm md:text-base">No transcript available.</span>
                     <span className="text-center text-xs md:text-sm mt-1">Record a new session or load one.</span>
                 </div>
             )}
@@ -1340,7 +1354,7 @@ export default function CourtProceedingsPage() {
             <Tooltip>
                 <TooltipTrigger asChild>
                 <Button onClick={() => handleDiarizeTranscript(currentRecordingFullAudioUri || loadedAudioUri, rawTranscript)} disabled={!canManuallyDiarize} variant="outline" aria-label="Diarize Transcript Manually" size="sm" className="h-8 px-2.5">
-                    {isDiarizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />} 
+                    {isDiarizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Users className="h-4 w-4" />}
                     <span className="ml-1.5 hidden sm:inline">Diarize</span>
                 </Button>
                 </TooltipTrigger>
@@ -1349,7 +1363,7 @@ export default function CourtProceedingsPage() {
             <Tooltip>
                 <TooltipTrigger asChild>
                 <Button onClick={handleInitiateSave} disabled={!canSave || isSaving} aria-label="Save Transcript" size="sm" className="h-8 px-2.5">
-                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />} 
+                    {isSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
                      <span className="ml-1.5 hidden sm:inline">Save Session</span>
                 </Button>
                 </TooltipTrigger>
@@ -1398,15 +1412,15 @@ export default function CourtProceedingsPage() {
           <Input
             type="text"
             placeholder="Enter search term..."
-            value={searchTerm} 
+            value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="flex-grow h-9 text-sm md:text-base"
+            className="flex-grow h-9 text-sm"
             aria-label="Search Term"
             onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
             suppressHydrationWarning={true}
           />
           <Button onClick={handleSearch} disabled={isSearching || (!rawTranscript.trim() && !diarizedTranscript) || !searchTerm.trim()} aria-label="Search Transcript" className="h-9 px-3">
-            {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />} 
+            {isSearching ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
             <span className="ml-2 hidden sm:inline text-sm">Search</span>
           </Button>
         </div>
@@ -1420,7 +1434,7 @@ export default function CourtProceedingsPage() {
             <div className="space-y-2 md:space-y-3 p-2 md:p-3 bg-primary/10 border border-primary/30 rounded-md">
                 <h3 className="font-semibold text-sm md:text-lg text-primary">Search Results:</h3>
                 <p className="text-xs md:text-sm italic text-muted-foreground">{searchResults.summary}</p>
-                <ScrollArea className="h-40 md:h-60 border rounded-md p-2 bg-background"> 
+                <ScrollArea className="h-40 md:h-60 border rounded-md p-2 bg-background">
                     <ul className="list-disc list-inside space-y-1 text-xs md:text-sm pl-2">
                     {searchResults.searchResults.map((result, index) => (
                         <li key={index} className="py-1 border-b border-border last:border-b-0">{result}</li>
@@ -1496,9 +1510,9 @@ export default function CourtProceedingsPage() {
             </div>
             <div className="flex items-center justify-between pt-1">
               <Label htmlFor="noise-cancellation-switch" className="text-xs md:text-sm font-medium">Enable Noise Cancellation (Placeholder)</Label>
-              <Switch 
-                id="noise-cancellation-switch" 
-                checked={noiseCancellationEnabled} 
+              <Switch
+                id="noise-cancellation-switch"
+                checked={noiseCancellationEnabled}
                 onCheckedChange={setNoiseCancellationEnabled}
                 disabled // Placeholder
               />
@@ -1512,7 +1526,7 @@ export default function CourtProceedingsPage() {
           <div className="space-y-3">
              <div>
                 <Label htmlFor="custom-legal-terms" className="text-xs md:text-sm font-medium">Custom Legal Terms & Jargon</Label>
-                <Textarea 
+                <Textarea
                     id="custom-legal-terms"
                     placeholder="Enter terms, one per line or comma-separated (e.g., res ipsa loquitur, voir dire, Obong Effiong Bassey)"
                     value={customLegalTerms}
@@ -1533,7 +1547,7 @@ export default function CourtProceedingsPage() {
             </Button>
           </div>
         </div>
-        
+
         <div className="p-2 md:p-3 border rounded-md bg-card shadow-sm">
             <h3 className="text-sm md:text-lg font-semibold mb-2 text-primary flex items-center"><Palette className="mr-2 h-4 md:h-5 w-4 md:w-5" />Theme</h3>
             <RadioGroup value={theme} onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')} className="text-xs md:text-sm space-y-1.5">
@@ -1659,7 +1673,6 @@ export default function CourtProceedingsPage() {
 
       <SidebarInset className={`flex flex-col transition-all duration-300 ease-in-out bg-background ${sidebarOpen && sidebarState === 'collapsed' ? "md:ml-[var(--sidebar-width-icon)]" : (sidebarOpen && sidebarState === 'expanded' ? "md:ml-[var(--sidebar-width)]" : "md:ml-0")}`}>
         <header className={`flex items-center justify-between p-2 sticky top-0 z-10 bg-background/90 backdrop-blur-sm border-b md:p-3 ${activeView === 'liveSession' ? 'hidden' : ''}`}>
-            {/* Mobile View: Hamburger + Compact Title */}
             <div className="flex items-center gap-2 md:hidden">
               <SidebarTrigger />
               <span className="font-semibold text-base text-primary truncate">
@@ -1671,7 +1684,6 @@ export default function CourtProceedingsPage() {
               </span>
             </div>
 
-            {/* Desktop View: Full Title */}
             <div className="hidden md:flex items-center w-full">
                 <h2 className="text-lg font-semibold text-primary">
                     {activeView === 'liveSession' && "Live Court Session"}
@@ -1683,7 +1695,7 @@ export default function CourtProceedingsPage() {
                 </h2>
             </div>
         </header>
-        
+
         <main className={`flex-grow overflow-auto ${activeView === 'liveSession' ? 'p-0' : 'p-2 md:p-3'}`}>
           {activeView === 'liveSession' && renderLiveSessionView()}
           {activeView === 'recordings' && renderRecordingsView()}
@@ -1775,7 +1787,7 @@ export default function CourtProceedingsPage() {
             </DialogContent>
         </Dialog>
 
-         {activeView !== 'liveSession' && currentDateTime && ( 
+         {activeView !== 'liveSession' && currentDateTime && (
             <footer className="w-full mt-auto p-2 md:p-2.5 text-center text-xs text-muted-foreground border-t bg-muted/30">
                 <p>&copy; {currentDateTime.getFullYear()} VeriCourt. All rights reserved.</p>
                 <p className="mt-0.5 text-[0.7rem] sm:text-xs">AI-Powered Legal Transcription for Nigerian Professionals.</p>
@@ -1785,4 +1797,4 @@ export default function CourtProceedingsPage() {
     </div>
   );
 }
-    
+
