@@ -12,7 +12,7 @@ import { Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2,
 import { AppLogo } from '@/components/layout/AppLogo';
 import { transcribeAudioAction, searchTranscriptAction, diarizeTranscriptAction } from './actions';
 import type { SmartSearchInput, SmartSearchOutput } from '@/ai/flows/smart-search';
-import type { DiarizeTranscriptInput, DiarizeTranscriptOutput, DiarizedSegment } from '@/ai/flows/diarize-transcript-flow';
+import type { DiarizeTranscriptInput, DiarizedSegment } from '@/ai/flows/diarize-transcript-flow';
 import { useToast } from '@/hooks/use-toast';
 import { Separator } from '@/components/ui/separator';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
@@ -84,6 +84,42 @@ export default function CourtProceedingsPage() {
     });
   };
 
+  const handleDiarizeTranscript = useCallback(async () => {
+    if (isDiarizing) {
+      toast({ title: 'Diarization in Progress', description: 'Please wait for the current diarization to complete.', variant: 'default' });
+      return;
+    }
+    const audioForDiarization = currentRecordingFullAudioUri || loadedAudioUri;
+    if (!audioForDiarization || !rawTranscript.trim()) {
+      // This specific toast might be too early if called automatically before user context is fully clear.
+      // Consider if automatic calls should silently skip or have a different notification.
+      // For now, keeping it, as manual button still exists.
+      if (!currentRecordingFullAudioUri && !loadedAudioUri) { // Only show if not implicitly handled by automatic flow start
+         toast({ title: 'Diarization Error', description: 'Full audio and raw transcript are required for diarization.', variant: 'destructive' });
+      }
+      return;
+    }
+    setIsDiarizing(true);
+    try {
+      const input: DiarizeTranscriptInput = { audioDataUri: audioForDiarization, rawTranscript };
+      const response = await diarizeTranscriptAction(input);
+      if (response.segments) {
+        setDiarizedTranscript(response.segments);
+        toast({ title: 'Diarization Complete', description: 'Transcript has been segmented by speaker.', icon: <CheckCircle2 className="h-5 w-5 text-green-500" /> });
+      } else if (response.error) {
+        toast({ title: 'Diarization Failed', description: response.error, variant: 'destructive' });
+        setDiarizedTranscript(null); // Clear any partial/failed diarization
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'An unknown error occurred during diarization.';
+      toast({ title: 'Diarization Exception', description: message, variant: 'destructive' });
+      setDiarizedTranscript(null); // Clear any partial/failed diarization
+    } finally {
+      setIsDiarizing(false);
+    }
+  }, [isDiarizing, currentRecordingFullAudioUri, loadedAudioUri, rawTranscript, toast]);
+
+
   const handleStartRecording = async () => {
     if (recordingState === 'idle' || recordingState === 'paused') {
       try {
@@ -139,20 +175,25 @@ export default function CourtProceedingsPage() {
         mediaRecorderRef.current.onstop = async () => {
           setRecordingState('idle');
           stream.getTracks().forEach(track => track.stop());
+          toast({ title: 'Recording Stopped', icon: <Square className="h-5 w-5 text-red-500" /> });
           
           if (audioChunksRef.current.length > 0) {
             const fullAudioBlob = new Blob(audioChunksRef.current, { type: audioChunksRef.current[0]?.type || 'audio/webm' });
             try {
               const audioDataUri = await blobToDataURI(fullAudioBlob);
               setCurrentRecordingFullAudioUri(audioDataUri);
-              setActiveTab("manage-session"); // Switch to manage session tab
+              setActiveTab("manage-session"); 
+              // Automatically trigger diarization if conditions met
+              if (rawTranscript.trim() && audioDataUri) {
+                // Wrapped in a timeout to allow state updates to propagate for handleDiarizeTranscript's checks
+                setTimeout(() => handleDiarizeTranscript(), 0); 
+              }
             } catch (error) {
               console.error("Error creating full audio URI:", error);
               toast({ title: 'Audio Processing Error', description: 'Failed to process full recording.', variant: 'destructive' });
             }
           }
           mediaRecorderRef.current = null;
-          toast({ title: 'Recording Stopped', icon: <Square className="h-5 w-5 text-red-500" /> });
         };
         
         mediaRecorderRef.current.start(5000); // Transcribe every 5 seconds
@@ -183,7 +224,7 @@ export default function CourtProceedingsPage() {
   };
 
   const handleInitiateSave = () => {
-    if (!rawTranscript.trim() && !diarizedTranscript) { // Allow saving if diarized even if raw is empty (unlikely but possible)
+    if (!rawTranscript.trim() && !diarizedTranscript) {
       toast({ title: "Cannot Save", description: "Transcript is empty.", variant: "destructive" });
       return;
     }
@@ -231,10 +272,16 @@ export default function CourtProceedingsPage() {
     setDiarizedTranscript(selectedTranscript.diarizedTranscript || null);
     const audioToLoad = selectedTranscript.audioDataUri || null;
     setLoadedAudioUri(audioToLoad);
-    setCurrentRecordingFullAudioUri(null);
+    setCurrentRecordingFullAudioUri(null); // Clear any live recording audio URI
     setCurrentSessionTitle(selectedTranscript.title); 
     setActiveTab("manage-session");
     toast({ title: 'Transcript Loaded', description: `"${selectedTranscript.title}" is now active.` });
+
+    // Automatically trigger diarization if conditions met
+    if (audioToLoad && selectedTranscript.rawTranscript.trim() && !selectedTranscript.diarizedTranscript) {
+       // Wrapped in a timeout to allow state updates to propagate for handleDiarizeTranscript's checks
+      setTimeout(() => handleDiarizeTranscript(), 0);
+    }
   };
 
   const handleSearch = async () => {
@@ -287,29 +334,7 @@ export default function CourtProceedingsPage() {
     toast({ title: 'Download Started', description: `"${title}.txt" is downloading.` });
   };
 
-  const handleDiarizeTranscript = async () => {
-    const audioForDiarization = currentRecordingFullAudioUri || loadedAudioUri;
-    if (!audioForDiarization || !rawTranscript.trim()) {
-      toast({ title: 'Diarization Error', description: 'Full audio and raw transcript are required for diarization.', variant: 'destructive' });
-      return;
-    }
-    setIsDiarizing(true);
-    try {
-      const input: DiarizeTranscriptInput = { audioDataUri: audioForDiarization, rawTranscript };
-      const response = await diarizeTranscriptAction(input);
-      if (response.segments) {
-        setDiarizedTranscript(response.segments);
-        toast({ title: 'Diarization Complete', description: 'Transcript has been segmented by speaker.', icon: <CheckCircle2 className="h-5 w-5 text-green-500" /> });
-      } else if (response.error) {
-        toast({ title: 'Diarization Failed', description: response.error, variant: 'destructive' });
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'An unknown error occurred during diarization.';
-      toast({ title: 'Diarization Exception', description: message, variant: 'destructive' });
-    } finally {
-      setIsDiarizing(false);
-    }
-  };
+  // Manual diarization trigger function is now just `handleDiarizeTranscript` (already defined with useCallback)
 
   useEffect(() => {
     if (transcriptScrollAreaRef.current && (rawTranscript || diarizedTranscript)) {
@@ -328,7 +353,7 @@ export default function CourtProceedingsPage() {
     return <Mic className={size} />;
   };
   
-  const canDiarize = recordingState === 'idle' && !!rawTranscript.trim() && !!(currentRecordingFullAudioUri || loadedAudioUri) && !diarizedTranscript;
+  const canManuallyDiarize = recordingState === 'idle' && !!rawTranscript.trim() && !!(currentRecordingFullAudioUri || loadedAudioUri) && !diarizedTranscript && !isDiarizing;
   const canSave = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript);
   const canDownload = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript);
 
@@ -407,15 +432,17 @@ export default function CourtProceedingsPage() {
                     </Tooltip>
                   )}
                 </div>
-                {isTranscribingChunk && (
+                {(isTranscribingChunk || (recordingState === 'recording' && !isTranscribingChunk)) && (
                   <div className="flex items-center text-sm text-muted-foreground pt-2">
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    <span>Transcribing audio chunk...</span>
+                    {isTranscribingChunk ? 
+                      <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Transcribing audio chunk...</> :
+                      <><Mic className="h-4 w-4 text-red-500 animate-pulse mr-2" /> Listening...</>
+                    }
                   </div>
                 )}
               </CardContent>
               <CardFooter>
-                <p className="text-xs text-muted-foreground">Recording will be chunked for live transcription. Full audio available after stopping.</p>
+                <p className="text-xs text-muted-foreground">Recording will be chunked for live transcription. Full audio and automatic diarization available after stopping.</p>
               </CardFooter>
             </Card>
              <Card className="shadow-lg mt-6">
@@ -437,7 +464,7 @@ export default function CourtProceedingsPage() {
             <Card className="shadow-lg">
               <CardHeader>
                 <CardTitle className="text-xl flex items-center"><FileText className="mr-2 h-6 w-6" />Session Management</CardTitle>
-                <CardDescription>Review, diarize, save, or download the current transcript and audio.</CardDescription>
+                <CardDescription>Review, diarize, save, or download the current transcript and audio. Diarization attempts to run automatically.</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 {(currentRecordingFullAudioUri || loadedAudioUri) && (
@@ -459,6 +486,7 @@ export default function CourtProceedingsPage() {
                             {diarizedTranscript ? "Diarized Transcript" : "Raw Transcript"}
                          </h3>
                          {diarizedTranscript && <ListOrdered className="h-5 w-5 text-primary" />}
+                         {isDiarizing && <Loader2 className="h-5 w-5 animate-spin text-primary" />}
                     </div>
                   <ScrollArea ref={transcriptScrollAreaRef} className="h-72 w-full rounded-md border p-4 bg-muted/30">
                     {diarizedTranscript ? (
@@ -470,21 +498,24 @@ export default function CourtProceedingsPage() {
                           </div>
                         ))}
                       </div>
-                    ) : (
+                    ) : rawTranscript ? (
                       <pre className="text-sm whitespace-pre-wrap font-sans leading-relaxed">
-                        {rawTranscript || <span className="text-muted-foreground">No transcript available. Record or load a session.</span>}
+                        {rawTranscript}
+                        {isDiarizing && <span className="block mt-2 text-muted-foreground"><Loader2 className="inline h-4 w-4 animate-spin mr-1" /> Attempting automatic diarization...</span>}
                       </pre>
+                    ) : (
+                         <span className="text-muted-foreground">No transcript available. Record or load a session.</span>
                     )}
                   </ScrollArea>
                 </div>
                  <div className="flex flex-wrap gap-2 items-center pt-4 border-t">
                     <Tooltip>
                         <TooltipTrigger asChild>
-                        <Button onClick={handleDiarizeTranscript} disabled={!canDiarize || isDiarizing} variant="outline" aria-label="Diarize Transcript">
-                            {isDiarizing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Users className="h-5 w-5" />} Diarize
+                        <Button onClick={handleDiarizeTranscript} disabled={!canManuallyDiarize} variant="outline" aria-label="Diarize Transcript Manually">
+                            {isDiarizing ? <Loader2 className="h-5 w-5 animate-spin" /> : <Users className="h-5 w-5" />} Diarize Manually
                         </Button>
                         </TooltipTrigger>
-                        <TooltipContent><p>Identify speakers in the transcript</p></TooltipContent>
+                        <TooltipContent><p>Manually re-run speaker identification if needed</p></TooltipContent>
                     </Tooltip>
                     <Tooltip>
                         <TooltipTrigger asChild>
@@ -572,7 +603,7 @@ export default function CourtProceedingsPage() {
                             <p className="font-medium">{st.title}</p>
                             <p className="text-xs text-muted-foreground">
                               {new Date(st.timestamp).toLocaleString()}
-                              {st.diarizedTranscript ? ' (Diarized)' : ''}
+                              {st.diarizedTranscript ? ' (Diarized)' : ' (Raw transcript)'}
                               {st.audioDataUri ? ' (Audio available)' : ' (No audio)'}
                             </p>
                           </div>
