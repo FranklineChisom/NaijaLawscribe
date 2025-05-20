@@ -118,6 +118,8 @@ export default function CourtProceedingsPage() {
   const [noiseCancellationEnabled, setNoiseCancellationEnabled] = useState<boolean>(false);
   const [customLegalTerms, setCustomLegalTerms] = useState<string>('');
 
+  const [waveformRandomValues, setWaveformRandomValues] = useState<number[]>([]);
+
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
@@ -132,6 +134,9 @@ export default function CourtProceedingsPage() {
   const { theme, setTheme } = useTheme();
 
   useEffect(() => {
+    // Initialize waveform random values on client mount
+    setWaveformRandomValues(Array.from({ length: 80 }, () => Math.random()));
+
     const storedTranscripts = localStorage.getItem('naijaLawScribeTranscripts');
     if (storedTranscripts) {
       try {
@@ -146,7 +151,6 @@ export default function CourtProceedingsPage() {
       setCustomLegalTerms(storedCustomTerms);
     }
 
-    // Set initial date/time on client mount and start interval
     setCurrentDateTime(new Date());
     dateTimeIntervalRef.current = setInterval(() => {
       setCurrentDateTime(new Date());
@@ -641,6 +645,7 @@ export default function CourtProceedingsPage() {
                   placeholder="Enter case title or number..."
                   className="text-sm h-8 mt-1 bg-card"
                   disabled={recordingState !== 'idle'}
+                  suppressHydrationWarning={true}
                 />
               </div>
               <div>
@@ -653,6 +658,7 @@ export default function CourtProceedingsPage() {
                   placeholder="Enter judge's name..."
                   className="text-sm h-8 mt-1 bg-card"
                   disabled={recordingState !== 'idle'}
+                  suppressHydrationWarning={true}
                 />
               </div>
               <div>
@@ -665,6 +671,7 @@ export default function CourtProceedingsPage() {
                   placeholder="e.g., Motion, Arraignment"
                   className="text-sm h-8 mt-1 bg-card"
                   disabled={recordingState !== 'idle'}
+                  suppressHydrationWarning={true}
                 />
               </div>
               <div>
@@ -677,6 +684,7 @@ export default function CourtProceedingsPage() {
                   placeholder="Enter courtroom number/name"
                   className="text-sm h-8 mt-1 bg-card"
                   disabled={recordingState !== 'idle'}
+                  suppressHydrationWarning={true}
                 />
               </div>
               <Separator className="my-3" />
@@ -708,6 +716,7 @@ export default function CourtProceedingsPage() {
                   className="text-xs h-7 flex-grow bg-card"
                   disabled={recordingState !== 'idle'}
                   onKeyPress={(e) => e.key === 'Enter' && handleAddParticipant()}
+                  suppressHydrationWarning={true}
                 />
                 <Button onClick={handleAddParticipant} size="sm" className="text-xs h-7 px-2" disabled={recordingState !== 'idle' || !newParticipantName.trim()}>
                   <PlusCircle size={12} className="mr-1"/> Add
@@ -745,11 +754,14 @@ export default function CourtProceedingsPage() {
                     <div className="relative w-full h-24 md:h-32 bg-muted/30 rounded-md">
                       <div className="absolute inset-0 flex items-center justify-center px-2 overflow-hidden">
                         {/* Simplified Waveform */}
-                        {Array.from({ length: 80 }).map((_, i) => {
+                        {waveformRandomValues.length === 80 && Array.from({ length: 80 }).map((_, i) => {
                            const barIsActive = recordingState === 'recording' && i < (elapsedTime % 80); 
-                           const randomHeight = Math.random() * 60 + 20; 
+                           // Use client-side random value for height when recording/transcribing
+                           const randomHeightFactor = waveformRandomValues[i] || 0.5; // Default to 0.5 if not yet set
+                           const actualRandomHeight = randomHeightFactor * 60 + 20;
+
                            const dynamicHeight = (isTranscribingChunk || (recordingState === 'recording' && autoTranscription)) && recordingState !== 'paused'
-                                                ? randomHeight 
+                                                ? actualRandomHeight 
                                                 : (recordingState === 'paused' ? 30 : Math.sin(i * 0.1 + elapsedTime * 0.5) * 25 + 40); 
                           return (
                             <div 
@@ -851,6 +863,7 @@ export default function CourtProceedingsPage() {
                   value={transcriptSearchTerm}
                   onChange={(e) => setTranscriptSearchTerm(e.target.value)}
                   className="pl-8 pr-4 py-1 text-sm h-8 w-48 md:w-64 bg-card border-border focus:border-primary"
+                  suppressHydrationWarning={true}
                 />
                 <Search size={16} className="absolute left-2 top-1/2 transform -translate-y-1/2 text-muted-foreground" />
               </div>
@@ -1435,9 +1448,9 @@ export default function CourtProceedingsPage() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-         {activeView !== 'liveSession' && ( 
+         {activeView !== 'liveSession' && currentDateTime && ( 
             <footer className="w-full mt-auto p-3 text-center text-xs text-muted-foreground border-t bg-muted/30">
-                <p>&copy; {currentDateTime ? currentDateTime.getFullYear() : new Date().getFullYear()} VeriCourt. All rights reserved.</p>
+                <p>&copy; {currentDateTime.getFullYear()} VeriCourt. All rights reserved.</p>
                 <p className="mt-1">AI-Powered Legal Transcription for Nigerian Professionals.</p>
             </footer>
          )}
@@ -1446,3 +1459,4 @@ export default function CourtProceedingsPage() {
   );
 }
     
+
