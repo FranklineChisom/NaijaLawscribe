@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { 
   Mic, Pause, Square, Save, Search, Loader2, AlertTriangle, CheckCircle2, FileText, Trash2, Download, Users, Settings, UserCircle, LayoutDashboard, FolderOpen, Edit, MessageSquare, Video, Palette, Landmark, Briefcase, Sigma, CircleHelp, FileAudio, Clock, Calendar, PlusCircle, ToggleLeft, ToggleRight, Headphones,
-  Play, SkipBack, SkipForward, MicOff, Info, ListOrdered, User, UploadCloud, AudioLines, Volume2
+  Play, SkipBack, SkipForward, MicOff, Info, ListOrdered, User, UploadCloud, AudioLines, Volume2, Sun, Moon, Laptop
 } from 'lucide-react';
 import { AppLogo } from '@/components/layout/AppLogo';
 import { transcribeAudioAction, searchTranscriptAction, diarizeTranscriptAction } from './actions';
@@ -25,6 +25,8 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea'; 
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { useTheme } from '@/components/theme-provider';
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 
 
 type RecordingState = 'idle' | 'recording' | 'paused';
@@ -115,11 +117,17 @@ export default function CourtProceedingsPage() {
 
   const { toast } = useToast();
   const { open: sidebarOpen } = useSidebar();
+  const { theme, setTheme } = useTheme();
 
   useEffect(() => {
     const storedTranscripts = localStorage.getItem('naijaLawScribeTranscripts');
     if (storedTranscripts) {
-      setSavedTranscripts(JSON.parse(storedTranscripts));
+      try {
+        setSavedTranscripts(JSON.parse(storedTranscripts));
+      } catch (e) {
+        console.error("Failed to parse stored transcripts:", e);
+        localStorage.removeItem('naijaLawScribeTranscripts');
+      }
     }
     const storedCustomTerms = localStorage.getItem('naijaLawScribeCustomTerms');
     if (storedCustomTerms) {
@@ -136,27 +144,31 @@ export default function CourtProceedingsPage() {
   }, []); 
 
   useEffect(() => {
-    // Fetch audio devices for settings when settings view is active or dependencies change
     const getAudioDevices = async () => {
       try {
-        await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+        await navigator.mediaDevices.getUserMedia({ audio: true, video: false }); // Request permission first
         const devices = await navigator.mediaDevices.enumerateDevices();
         const inputs = devices.filter(device => device.kind === 'audioinput');
         const outputs = devices.filter(device => device.kind === 'audiooutput');
         setAudioInputDevices(inputs);
         setAudioOutputDevices(outputs);
         if (inputs.length > 0 && !selectedInputDevice) setSelectedInputDevice(inputs[0].deviceId);
-        if (outputs.length > 0 && !selectedOutputDevice) setSelectedOutputDevice(outputs[0].deviceId);
+        // Output device selection is typically handled by OS/browser, so we don't auto-select
+        if (outputs.length > 0 && !selectedOutputDevice) setSelectedOutputDevice(outputs[0].deviceId); 
       } catch (err) {
         console.error("Error enumerating audio devices or getting permissions:", err);
-        // Consider a less intrusive way to inform about permission issues if needed
+        toast({
+            title: "Audio Device Error",
+            description: "Could not access audio devices. Please ensure microphone permissions are granted.",
+            variant: "destructive",
+        });
       }
     };
 
     if (activeView === 'settings') {
       getAudioDevices();
     }
-  }, [activeView, selectedInputDevice, selectedOutputDevice]);
+  }, [activeView, toast]);
 
 
   useEffect(() => {
@@ -188,7 +200,12 @@ export default function CourtProceedingsPage() {
 
   const persistSavedTranscripts = (updatedTranscripts: SavedTranscript[]) => {
     setSavedTranscripts(updatedTranscripts);
-    localStorage.setItem('naijaLawScribeTranscripts', JSON.stringify(updatedTranscripts));
+    try {
+      localStorage.setItem('naijaLawScribeTranscripts', JSON.stringify(updatedTranscripts));
+    } catch (e) {
+      console.error("Failed to save transcripts to localStorage:", e);
+      toast({ title: "Storage Error", description: "Could not save transcripts locally.", variant: "destructive" });
+    }
   };
 
   const blobToDataURI = (blob: Blob): Promise<string> => {
@@ -215,15 +232,18 @@ export default function CourtProceedingsPage() {
       return;
     }
     if (!audioForDiarization || !currentTranscript.trim()) {
-      if (audioUriToDiarize || transcriptToDiarize || (activeView === 'transcriptions' && (currentRecordingFullAudioUri || loadedAudioUri))) {
+      // Only toast if it was an explicit attempt (e.g., button click or loading a transcript that should diarize)
+      const isExplicitAttempt = !!(audioUriToDiarize || transcriptToDiarize) || 
+                                (activeView === 'transcriptions' && !!(currentRecordingFullAudioUri || loadedAudioUri));
+      if (isExplicitAttempt) {
           toast({ title: 'Diarization Skipped', description: 'Full audio and raw transcript are required.', variant: 'default' });
       }
-      setDiarizedTranscript(null);
+      setDiarizedTranscript(null); // Ensure diarized transcript is cleared if conditions not met
       return;
     }
 
     setIsDiarizing(true);
-    setDiarizedTranscript(null); 
+    setDiarizedTranscript(null); // Clear previous diarization results before starting a new one
     try {
       const input: DiarizeTranscriptInput = { 
         audioDataUri: audioForDiarization, 
@@ -236,6 +256,9 @@ export default function CourtProceedingsPage() {
         toast({ title: 'Diarization Complete', description: 'Transcript has been segmented by speaker.', icon: <CheckCircle2 className="h-5 w-5 text-green-500" /> });
       } else if (response.error) {
         toast({ title: 'Diarization Failed', description: response.error, variant: 'destructive' });
+        // Keep the raw transcript visible by not setting diarizedTranscript to an error state,
+        // or set it to a specific format indicating failure but retaining raw data view.
+        // For now, simply not setting it will keep raw transcript if it was already being shown.
         setDiarizedTranscript([{speaker: "Error", text: "Diarization failed. Raw transcript retained."}]);
       }
     } catch (error) {
@@ -245,7 +268,7 @@ export default function CourtProceedingsPage() {
     } finally {
       setIsDiarizing(false);
     }
-  }, [isDiarizing, currentRecordingFullAudioUri, loadedAudioUri, rawTranscript, toast, activeView, customLegalTerms]);
+  }, [isDiarizing, currentRecordingFullAudioUri, loadedAudioUri, rawTranscript, toast, customLegalTerms, activeView]);
 
 
   const handleStartRecording = async () => {
@@ -358,7 +381,6 @@ export default function CourtProceedingsPage() {
     if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'paused') {
       mediaRecorderRef.current.resume(); 
     } else {
-      // This case implies starting if completely idle or if state is somehow desynced
       handleStartRecording();
     }
   };
@@ -367,7 +389,6 @@ export default function CourtProceedingsPage() {
     if (mediaRecorderRef.current && (mediaRecorderRef.current.state === 'recording' || mediaRecorderRef.current.state === 'paused')) {
       mediaRecorderRef.current.stop(); 
     } else if (recordingState === 'idle' && (currentRecordingFullAudioUri || loadedAudioUri || rawTranscript)) {
-      // This is more like a "clear current session" button now if recording is already stopped.
       setRawTranscript('');
       setDiarizedTranscript(null);
       setCurrentRecordingFullAudioUri(null);
@@ -446,15 +467,12 @@ export default function CourtProceedingsPage() {
     toast({ title: 'Transcript Loaded', description: `"${selectedTranscript.title || "Untitled Session"}" is now active.` });
     setActiveView("transcriptions"); // Switch to transcriptions view to see the loaded content
 
-    // Automatically try to diarize if not already done and audio is present
     if (audioToLoad && selectedTranscript.rawTranscript.trim() && !selectedTranscript.diarizedTranscript) {
-      // Use a timeout to ensure state updates from loading have settled before diarizing
       setTimeout(() => handleDiarizeTranscript(audioToLoad, selectedTranscript.rawTranscript), 0);
     }
   };
 
   const handleSearch = async () => {
-    // Use active transcript for search, prioritizing diarized if available
     const transcriptToSearch = diarizedTranscript ? diarizedTranscript.map(s => `${s.speaker}: ${s.text}`).join('\n') : rawTranscript;
     if (!searchTerm.trim() || !transcriptToSearch.trim()) {
       toast({ title: 'Search Error', description: 'Please enter a search term and ensure there is a transcript to search.', variant: 'destructive' });
@@ -507,7 +525,6 @@ export default function CourtProceedingsPage() {
   useEffect(() => {
     const targetRef = activeView === 'liveSession' ? liveTranscriptScrollAreaRef : transcriptScrollAreaRef;
     if (targetRef.current && (rawTranscript || diarizedTranscript)) {
-        // Find the viewport div within the ScrollArea component
         const scrollElement = targetRef.current.querySelector('div[data-radix-scroll-area-viewport]');
         if (scrollElement) {
             scrollElement.scrollTop = scrollElement.scrollHeight;
@@ -520,14 +537,24 @@ export default function CourtProceedingsPage() {
   const canDownload = recordingState === 'idle' && (!!rawTranscript.trim() || !!diarizedTranscript);
 
   const handleSaveCustomTerms = () => {
-    localStorage.setItem('naijaLawScribeCustomTerms', customLegalTerms);
-    toast({ title: 'Custom Terms Saved', description: 'Your custom legal terms have been saved locally.' });
+    try {
+      localStorage.setItem('naijaLawScribeCustomTerms', customLegalTerms);
+      toast({ title: 'Custom Terms Saved', description: 'Your custom legal terms have been saved locally.' });
+    } catch (e) {
+      console.error("Failed to save custom terms to localStorage:", e);
+      toast({ title: "Storage Error", description: "Could not save custom terms.", variant: "destructive" });
+    }
   };
 
   const handleClearLocalStorage = () => {
-    localStorage.removeItem('naijaLawScribeTranscripts');
-    setSavedTranscripts([]);
-    toast({ title: 'Local Storage Cleared', description: 'All saved sessions have been removed from local storage.', variant: 'destructive' });
+    try {
+      localStorage.removeItem('naijaLawScribeTranscripts');
+      setSavedTranscripts([]);
+      toast({ title: 'Local Storage Cleared', description: 'All saved sessions have been removed from local storage.', variant: 'destructive' });
+    } catch (e) {
+      console.error("Failed to clear local storage:", e);
+      toast({ title: "Storage Error", description: "Could not clear local storage.", variant: "destructive" });
+    }
     setShowClearStorageDialog(false);
   };
 
@@ -627,7 +654,7 @@ export default function CourtProceedingsPage() {
                         {/* Simplified Waveform */}
                         {Array.from({ length: 80 }).map((_, i) => {
                            const barIsActive = recordingState === 'recording' && i < (elapsedTime % 80); 
-                           const randomHeight = Math.random() * 60 + 20; // For dynamic feel
+                           const randomHeight = Math.random() * 60 + 20; 
                            const dynamicHeight = (isTranscribingChunk || (recordingState === 'recording' && autoTranscription)) && recordingState !== 'paused'
                                                 ? randomHeight 
                                                 : (recordingState === 'paused' ? 30 : Math.sin(i * 0.1 + elapsedTime * 0.5) * 25 + 40); 
@@ -684,7 +711,7 @@ export default function CourtProceedingsPage() {
                         <Square size={28}/>
                      </Button>
                   )}
-                   {(recordingState === 'idle' && (rawTranscript || diarizedTranscript || currentRecordingFullAudioUri || loadedAudioUri)) && ( // Show "Clear Session" if idle but data exists
+                   {(recordingState === 'idle' && (rawTranscript || diarizedTranscript || currentRecordingFullAudioUri || loadedAudioUri)) && ( 
                         <Button onClick={handleStopRecording} variant="outline" size="lg" className="p-3 rounded-full w-16 h-16" aria-label="Clear Current Session Data">
                             <Trash2 size={28}/>
                         </Button>
@@ -757,7 +784,7 @@ export default function CourtProceedingsPage() {
                          <span className="text-muted-foreground">Waiting for recording or transcription...</span>
                     )}
                     {isDiarizing && <div className="flex items-center text-muted-foreground"><Loader2 className="inline h-4 w-4 animate-spin mr-1" /> Identifying speakers...</div>}
-                    {recordingState === 'recording' && autoTranscription && !isTranscribingChunk && !isTranscribingChunk && (
+                    {recordingState === 'recording' && autoTranscription && !isTranscribingChunk && ( // Removed isTranscribingChunk duplicate check
                       <div className="flex items-center animate-pulse text-muted-foreground">
                         <div className="h-2 w-2 rounded-full bg-primary mr-1 animate-ping delay-75"></div>
                         <div className="h-2 w-2 rounded-full bg-primary mr-1 animate-ping delay-150"></div>
@@ -835,7 +862,7 @@ export default function CourtProceedingsPage() {
       </CardHeader>
       <CardContent className="flex-grow overflow-auto p-4">
         {savedTranscripts.length > 0 ? (
-          <ScrollArea className="h-full max-h-[calc(100vh-220px)]"> {/* Adjust max-h based on header/footer */}
+          <ScrollArea className="h-full max-h-[calc(100vh-220px)]"> 
             <ul className="space-y-3">
               {savedTranscripts.sort((a,b) => b.timestamp - a.timestamp).map(st => (
                 <li key={st.id} className="flex flex-col sm:flex-row justify-between sm:items-center p-3 border rounded-md hover:bg-muted/50 transition-colors shadow-sm bg-card">
@@ -985,7 +1012,7 @@ export default function CourtProceedingsPage() {
           <Input
             type="text"
             placeholder="Enter search term..."
-            value={searchTerm} // Uses the global searchTerm state
+            value={searchTerm} 
             onChange={(e) => setSearchTerm(e.target.value)}
             className="flex-grow"
             aria-label="Search Term"
@@ -1068,7 +1095,7 @@ export default function CourtProceedingsPage() {
               <Label htmlFor="audio-output-select" className="text-sm font-medium">Audio Output Device (System Controlled)</Label>
               <Select value={selectedOutputDevice} onValueChange={setSelectedOutputDevice} disabled>
                 <SelectTrigger id="audio-output-select" className="mt-1">
-                  <SelectValue placeholder="Select output device..." />
+                  <SelectValue placeholder={audioOutputDevices.find(d=>d.deviceId === 'default')?.label || "System Default Output"} />
                 </SelectTrigger>
                 <SelectContent>
                   {audioOutputDevices.length > 0 ? audioOutputDevices.map(device => (
@@ -1115,6 +1142,25 @@ export default function CourtProceedingsPage() {
             </Button>
           </div>
         </div>
+        
+        <div className="p-4 border rounded-md bg-card shadow-sm">
+            <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><Palette className="mr-2 h-5 w-5" />Theme</h3>
+            <RadioGroup value={theme} onValueChange={(value) => setTheme(value as 'light' | 'dark' | 'system')}>
+                <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="light" id="theme-light" />
+                    <Label htmlFor="theme-light" className="flex items-center gap-2"><Sun size={16}/> Light</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="dark" id="theme-dark" />
+                    <Label htmlFor="theme-dark" className="flex items-center gap-2"><Moon size={16}/> Dark</Label>
+                </div>
+                <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="system" id="theme-system" />
+                    <Label htmlFor="theme-system" className="flex items-center gap-2"><Laptop size={16}/> System</Label>
+                </div>
+            </RadioGroup>
+            <p className="text-xs text-muted-foreground mt-2">Select your preferred application theme.</p>
+        </div>
 
         <div className="p-4 border rounded-md bg-card shadow-sm">
           <h3 className="text-lg font-semibold mb-3 text-primary flex items-center"><UploadCloud className="mr-2 h-5 w-5"/>Data Storage (Local)</h3>
@@ -1139,10 +1185,6 @@ export default function CourtProceedingsPage() {
                 </AlertDialogContent>
             </AlertDialog>
           <p className="text-xs text-muted-foreground mt-2">Cloud storage options are a future enhancement.</p>
-        </div>
-         <div className="p-4 border rounded-md bg-card shadow-sm">
-          <h3 className="text-lg font-semibold mb-2 text-primary flex items-center"><Palette className="mr-2 h-5 w-5" />Theme</h3>
-          <p className="text-sm text-muted-foreground">Dark mode is automatically handled by your system preference. The application uses a responsive theme defined in <code className="text-xs bg-muted p-1 rounded">globals.css</code>.</p>
         </div>
       </CardContent>
     </Card>
@@ -1228,6 +1270,7 @@ export default function CourtProceedingsPage() {
             </div>
              <div className="hidden md:flex items-center p-4 w-full">
                  <h2 className="text-xl font-semibold text-primary">
+                    {activeView === 'liveSession' && "Live Court Session"}
                     {activeView === 'recordings' && "Saved Sessions"}
                     {activeView === 'transcriptions' && "Manage Active Transcript"}
                     {activeView === 'searchCases' && "Smart Case Search"}
